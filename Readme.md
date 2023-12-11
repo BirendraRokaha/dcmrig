@@ -1,14 +1,14 @@
 # DICOM Toolkit - DICOM corelab tools.
 
 ### USAGE
-Usage: `dcmrig [OPTIONS] <COMMAND>`\
+Usage: `dcmrig [OPTIONS] <SUBCOMMAND> <ARGS>`\
 Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 
-**Commands:**
-- `sort`    [TESTING PHASE] Sort the given source with any combination of PatientID, PatientName or Modality
-- `anon`    [TESTING PHASE] Anonymize the given source each PatientID will be given a unique AnonID
-- `deid`    [TESTING PHASE] Deidentify the given source based on a mapping table
-- `report`  [UNDER CONSTRUCTION] [NON FUNCTIONAL] Generate a report for a sorted dataset
+**sub-commands:**
+- `sort`    [TESTING] Sort the given source with any combination of PatientID, PatientName or Modality
+- `anon`    [TESTING] Anonymize the given source each PatientID will be given a unique AnonID
+- `deid`    [TESTING] Deidentify the given source based on a mapping table
+- `report`  [NON FUNCTIONAL] Generate a report for a sorted dataset
 - `help`    Print this message or the help of the given subcommand(s)
 
 **Options:**

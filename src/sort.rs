@@ -3,7 +3,11 @@ use dcmrig_rs::*;
 use dicom::object::{open_file, FileDicomObject, InMemDicomObject};
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::{prelude::*, ThreadPoolBuilder};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 use tracing::{debug, error, info, warn};
 use walkdir::WalkDir;
 
@@ -31,26 +35,33 @@ pub fn dicom_sort(
             .collect();
         let total_len: u64 = all_files.len() as u64;
         info!("Total files found: {} | Starting sort", total_len);
+        let failed_case: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
+        let non_dcm_cases: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
         let pb = ProgressBar::new(total_len);
         pb.set_style(
             ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] ({pos}/{len}, ETA {eta})").unwrap(),
         );
-
         all_files
             .par_iter()
             .enumerate()
             .for_each(|(_index, working_path)| {
                 if let Ok(dcm_obj) = open_file(working_path.path()) {
                     sort_each_dcm_file(&dcm_obj, &destination_path, &sort_order_vec)
-                        .unwrap_or_else(|_| error!("Cannot sort {:#?}", &working_path.file_name()));
+                        .unwrap_or_else(|_| {
+                            let mut map = failed_case.lock().unwrap();
+                            *map += 1;
+                            error!("Cannot sort {:#?}", &working_path.file_name())});
                 } else {
+                    let mut map = non_dcm_cases.lock().unwrap();
+                    *map += 1;
                     copy_non_dicom_files(&working_path, &destination_path).unwrap_or_else(|_| {
-                        error!("Can't copy non dicom file {:#?}", &working_path.file_name())
+                    error!("Can't copy non dicom file {:#?}", &working_path.file_name())
                     })
                 }
                 pb.inc(1);
             });
         pb.finish();
+        print_status(total_len, *failed_case.lock().unwrap(), *non_dcm_cases.lock().unwrap(), "Sorted".to_string()).unwrap();
     });
     info!("DICOM Sort complete!");
     Ok(())

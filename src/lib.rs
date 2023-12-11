@@ -13,26 +13,10 @@ use dicom::{
     object::{FileDicomObject, InMemDicomObject},
 };
 use regex::Regex;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 use walkdir::DirEntry;
 
-// // Structs
-// pub struct DicomFile {
-//     pub source_path: PathBuf,
-//     pub action: String,
-// }
-
-// impl DicomFile {
-//     fn new_dicom_file(source_path: PathBuf) -> Self {
-//         DicomFile {
-//             source_path,
-//             action: "".to_string(),
-//         }
-//     }
-// }
-
-// Check if the given source directory path exists
-
+// Logo
 pub fn print_logo() {
     let mut art = String::new();
 
@@ -51,6 +35,7 @@ pub fn print_logo() {
     println!("{}", art);
 }
 
+// Check if the given source path exists, exits in failure
 pub fn check_source_path_exists(dir_path: &PathBuf) {
     match canonicalize(dir_path) {
         Ok(_) => (),
@@ -65,7 +50,7 @@ pub fn check_source_path_exists(dir_path: &PathBuf) {
     }
 }
 
-// Check if the given destination path exists
+// Check if the given destination path exists, create a new one recursively if it does not exist
 pub fn check_destination_path_exists(dir_path: &PathBuf) {
     match canonicalize(dir_path) {
         Ok(_) => (),
@@ -246,4 +231,20 @@ pub fn generate_dicom_file_path(
         replace_non_alphanumeric(dicom_tags_values.get("SeriesDescription").unwrap().trim())
     );
     Ok(dir_path)
+}
+
+pub fn print_status(
+    total_len: u64,
+    total_proc_failed_files: u64,
+    total_non_dcm_files: u64,
+    action: String,
+) -> Result<()> {
+    // let total_failed: u64 = *failed_case.lock().unwrap();
+    // let total_non_dcm: u64 = *non_dcm_cases.lock().unwrap();
+    let total_processed = total_len - { total_proc_failed_files + total_non_dcm_files };
+    info!("Total Files: {}", total_len);
+    info!("Failed Cases: {}", total_proc_failed_files);
+    info!("NON-DCM files: {}", total_non_dcm_files);
+    info!("Total {}: {}", action, total_processed);
+    Ok(())
 }
