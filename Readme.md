@@ -1,19 +1,20 @@
 # DICOM Toolkit - DICOM corelab tools.
 
 ### USAGE
-Usage: dcmrig [OPTIONS] <COMMAND>
+Usage: `dcmrig [OPTIONS] <COMMAND>`\
+Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 
-Commands:
-  sort    [TESTING PHASE] Sort the given source with any combination of PatientID, PatientName or Modality
-  anon    [TESTING PHASE] Anonymize the given source each PatientID will be given a unique AnonID
-  deid    [TESTING PHASE] Deidentify the given source based on a mapping table
-  report  [UNDER CONSTRUCTION] [NON FUNCTIONAL] Generate a report for a sorted dataset
-  help    Print this message or the help of the given subcommand(s)
+**Commands:**
+- `sort`    [TESTING PHASE] Sort the given source with any combination of PatientID, PatientName or Modality
+- `anon`    [TESTING PHASE] Anonymize the given source each PatientID will be given a unique AnonID
+- `deid`    [TESTING PHASE] Deidentify the given source based on a mapping table
+- `report`  [UNDER CONSTRUCTION] [NON FUNCTIONAL] Generate a report for a sorted dataset
+- `help`    Print this message or the help of the given subcommand(s)
 
-Options:
-  -v, --verbose  Verbose output
-  -h, --help     Print help
-  -V, --version  Print version
+**Options:**
+- -v, --verbose  Verbose output
+- -h, --help     Print help
+- -V, --version  Print version
 
 ## TOOLS
 1. Deidentification
@@ -21,7 +22,6 @@ Options:
 3. Dicom Sort
 4. Report
 
----
 ## TODO
 ### CORE
 - [x] Read all DICOM files from a given source
