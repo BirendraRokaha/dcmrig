@@ -16,16 +16,10 @@ Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 - -h, --help     Print help
 - -V, --version  Print version
 
-## TOOLS
-1. Deidentification
-2. Anonymization
-3. Dicom Sort
-4. Report
-
 ## TODO
 ### CORE
 - [x] Read all DICOM files from a given source
-- [x] Create and save new dicom file in the desired location
+- [x] Create and save a new dicom file in the desired location
 ### Nice to have
 - [x] Pretty output
 - [x] Multithreaded
@@ -37,12 +31,12 @@ Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 - [x] Match data with mapping table and change dicom tags
 - [x] Handle missing tags gracefully > partially complete
 
-2. Anonymization
-- [x] Track unique PatientID and assigne an UUID per ID
+2. Anonymisation
+- [x] Track unique PatientID and assign a UUID per unique ID
 
 3. Sort
-- [x] Ceeate Paths from the given list
-- [x] Save files to a generated destination path with desired filename
+- [x] Create Paths from the given list
+- [x] Save files to a generated destination path with the desired filename
 - [x] Sanitize dicom tags for missing data
 - [x] Sort based on PATIENTID, PATENTNAME, MODALITY
 

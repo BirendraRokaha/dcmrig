@@ -58,9 +58,8 @@ pub fn dicom_anon(source_path: PathBuf, destination_path: PathBuf) -> Result<()>
                 } else {
                     let mut map = non_dcm_cases.lock().unwrap();
                     *map += 1;
-                    copy_non_dicom_files(&working_path, &destination_path).unwrap_or_else(|_| {
-                        error!("Can't copy non dicom file {:#?}", &working_path.file_name());
-                    })
+                    copy_non_dicom_files(&working_path, &destination_path).unwrap_or_else(|_|
+                        error!("Can't copy non dicom file {:#?}", &working_path.file_name()))
                 }
                 pb.inc(1);
             });
