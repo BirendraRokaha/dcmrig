@@ -6,7 +6,7 @@ use dicom::{
     object::{open_file, FileDicomObject, InMemDicomObject},
 };
 use indicatif::{ProgressBar, ProgressStyle};
-use rayon::{prelude::*, ThreadPoolBuilder};
+use rayon::prelude::*;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -22,50 +22,57 @@ pub fn dicom_anon(source_path: PathBuf, destination_path: PathBuf) -> Result<()>
         source_path.display(),
         destination_path.display()
     );
-    let pool = ThreadPoolBuilder::new().num_threads(256).build().unwrap();
-    pool.install(|| {
-        let anon_id_tracker: Arc<Mutex<HashMap<String, String>>> =
-            Arc::new(Mutex::new(HashMap::new()));
-        check_source_path_exists(&source_path);
-        check_destination_path_exists(&destination_path);
-        info!("Indexing files from: {}", source_path.display());
-        let all_files: Vec<_> = WalkDir::new(source_path)
-            .into_iter()
-            .filter_map(|entry| entry.ok())
-            .par_bridge()
-            .filter(|entry| entry.file_type().is_file())
-            .collect();
-        let total_len: u64 = all_files.len() as u64;
-        info!("Total files found: {} | Starting anon", total_len);
-        let failed_case: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
-        let non_dcm_cases: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
-        let pb = ProgressBar::new(total_len);
-        pb.set_style(
-            ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] ({pos}/{len}, ETA {eta})").unwrap(),
-        );
-        all_files
-            .par_iter()
-            .enumerate()
-            .for_each(|(_index, working_path)| {
-                if let Ok(dcm_obj) = open_file(working_path.path()) {
-                    let map_clone = Arc::clone(&anon_id_tracker);
-                    anon_each_dcm_file(&dcm_obj, &destination_path, map_clone)
-                        .unwrap_or_else(|_| {
-                            let mut map = failed_case.lock().unwrap();
-                            *map += 1;
-                            error!("Can't anon {:#?}", &working_path.file_name());
-                        });
-                } else {
-                    let mut map = non_dcm_cases.lock().unwrap();
+
+    let anon_id_tracker: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
+    check_source_path_exists(&source_path);
+    check_destination_path_exists(&destination_path);
+    info!("Indexing files from: {}", source_path.display());
+    let all_files: Vec<_> = WalkDir::new(source_path)
+        .into_iter()
+        .filter_map(|entry| entry.ok())
+        .par_bridge()
+        .filter(|entry| entry.file_type().is_file())
+        .collect();
+    let total_len: u64 = all_files.len() as u64;
+    info!("Total files found: {} | Starting anon", total_len);
+    let failed_case: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
+    let non_dcm_cases: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
+    let pb = ProgressBar::new(total_len);
+    pb.set_style(
+        ProgressStyle::with_template(
+            "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] ({pos}/{len}, ETA {eta})",
+        )
+        .unwrap(),
+    );
+    all_files
+        .par_iter()
+        .enumerate()
+        .for_each(|(_index, working_path)| {
+            if let Ok(dcm_obj) = open_file(working_path.path()) {
+                let map_clone = Arc::clone(&anon_id_tracker);
+                anon_each_dcm_file(&dcm_obj, &destination_path, map_clone).unwrap_or_else(|_| {
+                    let mut map = failed_case.lock().unwrap();
                     *map += 1;
-                    copy_non_dicom_files(&working_path, &destination_path).unwrap_or_else(|_|
-                        error!("Can't copy non dicom file {:#?}", &working_path.file_name()))
-                }
-                pb.inc(1);
-            });
-        pb.finish();
-        print_status(total_len, *failed_case.lock().unwrap(), *non_dcm_cases.lock().unwrap(), "Anon".to_string()).unwrap();
-    });
+                    error!("Can't anon {:#?}", &working_path.file_name());
+                });
+            } else {
+                let mut map = non_dcm_cases.lock().unwrap();
+                *map += 1;
+                copy_non_dicom_files(&working_path, &destination_path).unwrap_or_else(|_| {
+                    error!("Can't copy non dicom file {:#?}", &working_path.file_name())
+                })
+            }
+            pb.inc(1);
+        });
+    pb.finish();
+    print_status(
+        total_len,
+        *failed_case.lock().unwrap(),
+        *non_dcm_cases.lock().unwrap(),
+        "Anon".to_string(),
+    )
+    .unwrap();
+
     info!("DICOM Anon complete!");
     Ok(())
 }

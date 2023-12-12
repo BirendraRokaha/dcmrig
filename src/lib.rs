@@ -171,7 +171,7 @@ pub fn modify_tags_with_id(
     dcm_obj.put(DataElement::new(
         tags::DEIDENTIFICATION_METHOD,
         VR::LO,
-        "DICOM_TOOLS_RS",
+        "DCMRig",
     ));
     dcm_obj.put(DataElement::new(
         tags::PATIENT_IDENTITY_REMOVED,
