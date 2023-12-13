@@ -24,8 +24,7 @@ pub fn dicom_anon(source_path: PathBuf, destination_path: PathBuf) -> Result<()>
     );
 
     let anon_id_tracker: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
-    check_source_path_exists(&source_path);
-    check_destination_path_exists(&destination_path);
+    check_given_path_exists(&source_path, &destination_path)?;
     info!("Indexing files from: {}", source_path.display());
     let all_files: Vec<_> = WalkDir::new(source_path)
         .into_iter()
@@ -95,9 +94,8 @@ fn anon_each_dcm_file(
     let mut new_dicom_object = modify_tags_with_id(dcm_obj.clone(), patient_anon_id)?;
     new_dicom_object = dicom_anon_date_time(new_dicom_object)?;
 
-    let dicom_tags_values: HashMap<String, String> =
-        get_sanitized_tag_values(new_dicom_object.clone())?;
-    let file_name = generate_dicom_file_name(dicom_tags_values.clone(), "ANON".to_string())?;
+    let dicom_tags_values: HashMap<String, String> = get_sanitized_tag_values(&new_dicom_object)?;
+    let file_name = generate_dicom_file_name(&dicom_tags_values, "ANON".to_string())?;
     let dir_path = generate_dicom_file_path(dicom_tags_values, &destination_path)?;
     create_target_dir(&dir_path)?;
     let mut full_path = format!("{}/{}", dir_path, file_name);
@@ -110,7 +108,7 @@ fn anon_each_dcm_file(
 fn dicom_anon_date_time(
     mut dcm_obj: FileDicomObject<InMemDicomObject>,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
-    let dicom_date_tags = vec![
+    let dicom_date_tags = [
         (tags::STUDY_DATE, VR::DA),
         (tags::SERIES_DATE, VR::DA),
         (tags::ACQUISITION_DATE, VR::DA),
@@ -121,7 +119,7 @@ fn dicom_anon_date_time(
         (tags::PERFORMED_PROCEDURE_STEP_END_DATE, VR::DA),
         (tags::CONTENT_DATE, VR::DA),
     ];
-    let dicom_time_tags = vec![
+    let dicom_time_tags = [
         (tags::STUDY_TIME, VR::TM),
         (tags::SERIES_TIME, VR::TM),
         (tags::ACQUISITION_TIME, VR::TM),

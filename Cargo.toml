@@ -18,7 +18,6 @@ path = "src/lib.rs"
 name = "dcmrig"
 path = "src/main.rs"
 
-
 [dependencies]
 anyhow = "1.0.75"
 clap = { version = "4.4.9", features = ["derive"] }

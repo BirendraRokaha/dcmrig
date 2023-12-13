@@ -10,11 +10,35 @@ use anyhow::Result;
 use dicom::{
     core::{DataElement, VR},
     dictionary_std::tags,
-    object::{FileDicomObject, InMemDicomObject},
+    object::{FileDicomObject, InMemDicomObject, Tag},
 };
 use regex::Regex;
 use tracing::{error, info, warn};
 use walkdir::DirEntry;
+
+// Tags to get data for
+static DICOM_TAGS_SANITIZED: [&str; 10] = [
+    "PatientID",
+    "PatientName",
+    "Modality",
+    "StudyDate",
+    "StudyTime",
+    "SeriesNumber",
+    "SeriesInstanceUID",
+    "StudyInstanceUID",
+    "InstanceNumber",
+    "SeriesDescription",
+];
+
+// Tags to change data for
+static DICOM_TAGS_CHANGE: [(Tag, VR); 6] = [
+    (tags::PATIENT_ID, VR::LO),
+    (tags::PATIENT_NAME, VR::PN),
+    (tags::INSTITUTION_NAME, VR::LO),
+    (tags::INSTITUTION_ADDRESS, VR::ST),
+    (tags::ACCESSION_NUMBER, VR::SH),
+    (tags::STUDY_ID, VR::SH),
+];
 
 // Logo
 pub fn print_logo() {
@@ -35,30 +59,28 @@ pub fn print_logo() {
     println!("{}", art);
 }
 
-// Check if the given source path exists, exits in failure
-pub fn check_source_path_exists(dir_path: &PathBuf) {
-    match canonicalize(dir_path) {
+pub fn check_given_path_exists(src_path: &PathBuf, dest_path: &PathBuf) -> Result<()> {
+    // Source Path
+    match canonicalize(src_path) {
         Ok(_) => (),
         Err(e) => {
             error!(
                 "Given source Path doesnot exist: {}\n{}",
-                dir_path.display(),
+                src_path.display(),
                 e
             );
             exit(1)
         }
     }
-}
-
-// Check if the given destination path exists, create a new one recursively if it does not exist
-pub fn check_destination_path_exists(dir_path: &PathBuf) {
-    match canonicalize(dir_path) {
+    // Destination Path
+    match canonicalize(dest_path) {
         Ok(_) => (),
-        Err(_) => create_dir_all(dir_path).unwrap_or_else(|_| {
-            error!("Can't create dir: {}", dir_path.display());
+        Err(_) => create_dir_all(dest_path).unwrap_or_else(|_| {
+            error!("Can't create dir: {}", dest_path.display());
             exit(1)
         }),
     }
+    Ok(())
 }
 
 // For all non DICOM files, Copy them to a NON_DICOM directory in the destination path
@@ -90,31 +112,21 @@ pub fn replace_non_alphanumeric(input: &str) -> String {
 // For a given list of tags. Get the sanitized values.
 // Removes all unnecessary characters and adds NoValue_ if value is not found for the tag
 pub fn get_sanitized_tag_values(
-    dcm_obj: FileDicomObject<InMemDicomObject>,
+    dcm_obj: &FileDicomObject<InMemDicomObject>,
 ) -> Result<HashMap<String, String>> {
-    let dicom_tags = vec![
-        "PatientID".to_string(),
-        "PatientName".to_string(),
-        "Modality".to_string(),
-        "StudyDate".to_string(),
-        "StudyTime".to_string(),
-        "SeriesNumber".to_string(),
-        "SeriesInstanceUID".to_string(),
-        "StudyInstanceUID".to_string(),
-        "InstanceNumber".to_string(),
-        "SeriesDescription".to_string(),
-    ];
     let mut dicom_tags_values = HashMap::new();
-    for each_tag in dicom_tags {
-        let tag_value = dcm_obj.element_by_name(each_tag.as_str());
+    for each_tag in DICOM_TAGS_SANITIZED {
+        let tag_value = dcm_obj.element_by_name(each_tag);
+        // println!("{:#?}", tag_value);
         match tag_value {
             Ok(_) => {
-                dicom_tags_values.insert(each_tag, tag_value?.to_str()?.to_string());
+                // let f_tag_value: &str = tag_value?.to_str()?.as_ref();
+                dicom_tags_values.insert(each_tag.to_string(), tag_value?.to_str()?.to_string());
             }
             Err(_) => {
                 warn!("No value for {}", each_tag);
                 let final_value = format!("NoValue_{}", each_tag);
-                dicom_tags_values.insert(each_tag, final_value);
+                dicom_tags_values.insert(each_tag.to_string(), final_value);
             }
         }
     }
@@ -146,15 +158,7 @@ pub fn modify_tags_with_id(
     mut dcm_obj: FileDicomObject<InMemDicomObject>,
     patient_deid: String,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
-    let dicom_tags = vec![
-        (tags::PATIENT_ID, VR::LO),
-        (tags::PATIENT_NAME, VR::PN),
-        (tags::INSTITUTION_NAME, VR::LO),
-        (tags::INSTITUTION_ADDRESS, VR::ST),
-        (tags::ACCESSION_NUMBER, VR::SH),
-        (tags::STUDY_ID, VR::SH),
-    ];
-    for each_v in dicom_tags {
+    for each_v in DICOM_TAGS_CHANGE {
         dcm_obj.put(DataElement::new(each_v.0, each_v.1, patient_deid.as_ref()));
     }
     // Mask all PN values with the given ID
@@ -183,7 +187,7 @@ pub fn modify_tags_with_id(
 
 // Generate the Dicom filename based on the dicom tags
 pub fn generate_dicom_file_name(
-    dicom_tags_values: HashMap<String, String>,
+    dicom_tags_values: &HashMap<String, String>,
     prefix: String,
 ) -> Result<String> {
     let file_name = format!(

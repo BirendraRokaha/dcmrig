@@ -22,8 +22,7 @@ pub fn dicom_sort(
         destination_path.display()
     );
 
-    check_source_path_exists(&source_path);
-    check_destination_path_exists(&destination_path);
+    check_given_path_exists(&source_path, &destination_path)?;
     let sort_order_vec = generate_sort_order(sort_order).unwrap();
     info!("Indexing files from: {}", source_path.display());
     let all_files: Vec<_> = WalkDir::new(source_path)
@@ -83,11 +82,12 @@ fn sort_each_dcm_file(
     destination_path: &PathBuf,
     sort_order_vec: &Vec<String>,
 ) -> Result<()> {
-    let dicom_tags_values = get_sanitized_tag_values(dcm_obj.clone())?;
-    let order_level = generate_order_level(sort_order_vec.clone(), dicom_tags_values.clone());
+    let dicom_tags_values = get_sanitized_tag_values(&dcm_obj)?;
+    let order_level = generate_order_level(sort_order_vec, &dicom_tags_values);
     let file_name = generate_dicom_file_name(
-        dicom_tags_values.clone(),
-        dicom_tags_values.get("PatientName").unwrap().to_string(),
+        &dicom_tags_values,
+        // dicom_tags_values.get("PatientName").unwrap().to_string(),
+        replace_non_alphanumeric(dicom_tags_values.get("PatientName").unwrap().trim()),
     )?;
     let dir_path = format!(
         "{}/{}{}T{}_{}/{:0>4}_{}",
@@ -137,8 +137,8 @@ fn generate_sort_order(ord_input: String) -> Result<Vec<String>> {
 }
 
 fn generate_order_level(
-    order_level_vec: Vec<String>,
-    dicom_tags_values: HashMap<String, String>,
+    order_level_vec: &Vec<String>,
+    dicom_tags_values: &HashMap<String, String>,
 ) -> Result<String> {
     let mut order_level: String = "".to_string();
     for each in order_level_vec {

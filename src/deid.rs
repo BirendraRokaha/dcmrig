@@ -26,9 +26,8 @@ pub fn dicom_deid(
         mapping_table.display(),
     );
 
-    check_source_path_exists(&source_path);
-    check_destination_path_exists(&destination_path);
-    let mapping_dict = generate_mapping_dict(mapping_table.clone()).unwrap_or_else(|_| {
+    check_given_path_exists(&source_path, &destination_path)?;
+    let mapping_dict = generate_mapping_dict(&mapping_table).unwrap_or_else(|_| {
         error!("Can't open the mapping table: {}", mapping_table.display());
         exit(1);
     });
@@ -99,8 +98,8 @@ fn deid_each_dcm_file(
         None => bail!("DeID for {patient_id} is not found"),
     };
     let new_dicom_object = modify_tags_with_id(dcm_obj.clone(), patient_deid)?;
-    let dicom_tags_values = get_sanitized_tag_values(new_dicom_object.clone())?;
-    let file_name = generate_dicom_file_name(dicom_tags_values.clone(), "DeID".to_string())?;
+    let dicom_tags_values = get_sanitized_tag_values(&new_dicom_object)?;
+    let file_name = generate_dicom_file_name(&dicom_tags_values, "DeID".to_string())?;
     let dir_path = generate_dicom_file_path(dicom_tags_values, &destination_path)?;
     create_target_dir(&dir_path)?;
     let mut full_path = format!("{}/{}", dir_path, file_name);
@@ -113,7 +112,7 @@ fn deid_each_dcm_file(
 /// Generate a dictionary based on the Mapping table
 /// Eg DeID001,U012345 >> {"U012345"; "DeID001"}
 /// All lines that dont follow DeID,PatientID pattern will be ignored
-fn generate_mapping_dict(mapping_table: PathBuf) -> Result<HashMap<String, String>> {
+fn generate_mapping_dict(mapping_table: &PathBuf) -> Result<HashMap<String, String>> {
     let mut data_map: HashMap<String, String> = HashMap::new();
     if let Ok(file) = File::open(&mapping_table) {
         let reader = BufReader::new(file);
