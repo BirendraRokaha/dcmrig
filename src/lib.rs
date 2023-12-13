@@ -234,6 +234,7 @@ pub fn generate_dicom_file_path(
         dicom_tags_values.get("SeriesNumber").unwrap(),
         replace_non_alphanumeric(dicom_tags_values.get("SeriesDescription").unwrap().trim())
     );
+    create_target_dir(&dir_path)?;
     Ok(dir_path)
 }
 

@@ -110,8 +110,7 @@ fn sort_each_dcm_file(
         replace_non_alphanumeric(dicom_tags_values.get("SeriesDescription").unwrap().trim())
     );
     create_target_dir(&dir_path)?;
-    let mut full_path = format!("{}/{}", dir_path, file_name);
-    full_path = check_if_dup_exists(full_path);
+    let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
     debug!("Saving file: {} to: {}", file_name, dir_path);
     dcm_obj.write_to_file(full_path)?;
     Ok(())

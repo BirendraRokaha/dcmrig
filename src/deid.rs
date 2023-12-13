@@ -101,9 +101,7 @@ fn deid_each_dcm_file(
     let dicom_tags_values = get_sanitized_tag_values(&new_dicom_object)?;
     let file_name = generate_dicom_file_name(&dicom_tags_values, "DeID".to_string())?;
     let dir_path = generate_dicom_file_path(dicom_tags_values, &destination_path)?;
-    create_target_dir(&dir_path)?;
-    let mut full_path = format!("{}/{}", dir_path, file_name);
-    full_path = check_if_dup_exists(full_path);
+    let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
     debug!("Saving file: {} to: {}", file_name, dir_path);
     new_dicom_object.write_to_file(full_path)?;
     Ok(())
