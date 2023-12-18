@@ -12,9 +12,11 @@ use dicom::{
     dictionary_std::tags,
     object::{FileDicomObject, InMemDicomObject, Tag},
 };
+use indicatif::{ProgressBar, ProgressStyle};
+use rayon::iter::{ParallelBridge, ParallelIterator};
 use regex::Regex;
 use tracing::{error, info, warn};
-use walkdir::DirEntry;
+use walkdir::{DirEntry, WalkDir};
 
 // Tags to get data for
 static DICOM_TAGS_SANITIZED: [&str; 10] = [
@@ -59,7 +61,32 @@ pub fn print_logo() {
     println!("{}", art);
 }
 
-pub fn check_given_path_exists(src_path: &PathBuf, dest_path: &PathBuf) -> Result<()> {
+// Initial setup before starting the action
+pub fn preprocessing_setup(
+    source_path: &PathBuf,
+    destination_path: &PathBuf,
+) -> Result<(Vec<DirEntry>, u64, ProgressBar)> {
+    check_given_path_exists(&source_path, &destination_path)?;
+    info!("Indexing files from: {}", source_path.display());
+    let all_files: Vec<_> = WalkDir::new(source_path)
+        .into_iter()
+        .filter_map(|entry| entry.ok())
+        .par_bridge()
+        .filter(|entry| entry.file_type().is_file())
+        .collect();
+    let total_len: u64 = all_files.len() as u64;
+    info!("Total files found: {} | Starting deid", total_len);
+    let pb = ProgressBar::new(total_len);
+    pb.set_style(
+        ProgressStyle::with_template(
+            "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] ({pos}/{len}, ETA {eta})",
+        )
+        .unwrap(),
+    );
+    Ok((all_files, total_len, pb))
+}
+
+fn check_given_path_exists(src_path: &PathBuf, dest_path: &PathBuf) -> Result<()> {
     // Source Path
     match canonicalize(src_path) {
         Ok(_) => (),
@@ -154,7 +181,7 @@ pub fn check_if_dup_exists(full_path: String) -> String {
 
 // Change certain tags to the given ID and add deidentified tags.
 // Returns a cloned dicom object with modified values
-pub fn modify_tags_with_id(
+pub fn mask_tags_with_id(
     mut dcm_obj: FileDicomObject<InMemDicomObject>,
     patient_deid: String,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
@@ -253,3 +280,22 @@ pub fn print_status(
     info!("Total {}: {}", action, total_processed);
     Ok(())
 }
+
+//
+// #[derive(Debug, Clone)]
+// pub struct DcmToStore {
+//     pub dcm_obj: FileDicomObject<InMemDicomObject>,
+//     pub dest_path: String,
+// }
+
+// impl DcmToStore {
+//     pub fn new(dcm_obj: FileDicomObject<InMemDicomObject>, dest_path: String) -> Self {
+//         DcmToStore { dcm_obj, dest_path }
+//     }
+
+//     pub fn push_for_store(&self) {
+//         self.dcm_obj
+//             .write_to_file(&self.dest_path)
+//             .unwrap_or_else(|_| error!("Failed to store dicom file: {}", &self.dest_path))
+//     }
+// }

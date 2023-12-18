@@ -5,7 +5,6 @@ use dicom::{
     dictionary_std::tags,
     object::{open_file, FileDicomObject, InMemDicomObject},
 };
-use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::{
     collections::HashMap,
@@ -14,7 +13,6 @@ use std::{
 };
 use tracing::{debug, error, info};
 use uuid::Uuid;
-use walkdir::WalkDir;
 
 pub fn dicom_anon(source_path: PathBuf, destination_path: PathBuf) -> Result<()> {
     info!(
@@ -23,26 +21,13 @@ pub fn dicom_anon(source_path: PathBuf, destination_path: PathBuf) -> Result<()>
         destination_path.display()
     );
 
-    let anon_id_tracker: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
-    check_given_path_exists(&source_path, &destination_path)?;
-    info!("Indexing files from: {}", source_path.display());
-    let all_files: Vec<_> = WalkDir::new(source_path)
-        .into_iter()
-        .filter_map(|entry| entry.ok())
-        .par_bridge()
-        .filter(|entry| entry.file_type().is_file())
-        .collect();
-    let total_len: u64 = all_files.len() as u64;
-    info!("Total files found: {} | Starting anon", total_len);
+    // Set up required variables
+    let (all_files, total_len, pb) = preprocessing_setup(&source_path, &destination_path)?;
     let failed_case: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
     let non_dcm_cases: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
-    let pb = ProgressBar::new(total_len);
-    pb.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] ({pos}/{len}, ETA {eta})",
-        )
-        .unwrap(),
-    );
+    let anon_id_tracker: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
+
+    // Main Loop
     all_files
         .par_iter()
         .enumerate()
@@ -91,7 +76,7 @@ fn anon_each_dcm_file(
         }
     }
     let patient_anon_id = map.get(&patient_id).unwrap().to_string();
-    let mut new_dicom_object = modify_tags_with_id(dcm_obj.clone(), patient_anon_id)?;
+    let mut new_dicom_object = mask_tags_with_id(dcm_obj.clone(), patient_anon_id)?;
     new_dicom_object = dicom_anon_date_time(new_dicom_object)?;
 
     let dicom_tags_values: HashMap<String, String> = get_sanitized_tag_values(&new_dicom_object)?;

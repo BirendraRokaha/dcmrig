@@ -1,7 +1,6 @@
 use anyhow::Result;
 use dcmrig_rs::*;
 use dicom::object::{open_file, FileDicomObject, InMemDicomObject};
-use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::{
     collections::HashMap,
@@ -9,7 +8,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tracing::{debug, error, info, warn};
-use walkdir::WalkDir;
 
 pub fn dicom_sort(
     source_path: PathBuf,
@@ -22,26 +20,13 @@ pub fn dicom_sort(
         destination_path.display()
     );
 
-    check_given_path_exists(&source_path, &destination_path)?;
+    // Set up required variables
+    let (all_files, total_len, pb) = preprocessing_setup(&source_path, &destination_path)?;
     let sort_order_vec = generate_sort_order(sort_order).unwrap();
-    info!("Indexing files from: {}", source_path.display());
-    let all_files: Vec<_> = WalkDir::new(source_path)
-        .into_iter()
-        .filter_map(|entry| entry.ok())
-        .par_bridge()
-        .filter(|entry| entry.file_type().is_file())
-        .collect();
-    let total_len: u64 = all_files.len() as u64;
-    info!("Total files found: {} | Starting sort", total_len);
     let failed_case: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
     let non_dcm_cases: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
-    let pb = ProgressBar::new(total_len);
-    pb.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] ({pos}/{len}, ETA {eta})",
-        )
-        .unwrap(),
-    );
+
+    // Main loop
     all_files
         .par_iter()
         .enumerate()
@@ -86,7 +71,6 @@ fn sort_each_dcm_file(
     let order_level = generate_order_level(sort_order_vec, &dicom_tags_values);
     let file_name = generate_dicom_file_name(
         &dicom_tags_values,
-        // dicom_tags_values.get("PatientName").unwrap().to_string(),
         replace_non_alphanumeric(dicom_tags_values.get("PatientName").unwrap().trim()),
     )?;
     let dir_path = format!(
