@@ -1,6 +1,6 @@
 # DICOM Toolkit - DICOM corelab tools.
 
-<img src="https://github.com/console-rs/indicatif/blob/main/misc/DEID_TEST_RUN.gif?raw=true">
+<img src="https://github.com/BirendraRokaha/dcmrig/blob/main/misc/DEID_TEST_RUN.gif">
 
 ### USAGE
 Usage: `dcmrig [OPTIONS] <SUBCOMMAND> <ARGS>`\
