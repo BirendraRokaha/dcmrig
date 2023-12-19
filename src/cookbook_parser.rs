@@ -86,13 +86,8 @@ fn check_for_config() -> Result<String> {
 
 pub fn parse_toml_config() -> Result<(Vec<String>, HashMap<String, String>, Vec<String>)> {
     let file_content = check_for_config()?;
-    // let file_path = "/Users/biren/PROGRAMMING/RUST/RELEASE_PROJECTS/dcmrig/TEST_DATA/sample.toml";
-
-    // let file_content = fs::read_to_string(file_path).expect("Failed to read file");
-
     let toml_des: CookBook =
         toml::from_str(&file_content).expect("Failed to deserialize Cargo.toml");
-
     let mask_list = toml_des.mask.unwrap_or_else(|| MaskDelTags::default()).tags;
 
     let add_list = toml_des.add.unwrap_or_else(|| AddTags::default()).tags;

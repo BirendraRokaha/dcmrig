@@ -31,6 +31,23 @@ Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 - [x] Read from a mapping table to create a mapping dictionary
 - [x] Match data with mapping table and change dicom tags
 - [x] Handle missing tags gracefully > partially complete
+- [x] Derive add, delete, and mask tags from a config Toml file
+
+A sample toml file is created at the users home dir ~/.dcmrig/config.toml during the first execution.
+
+```toml
+# The chain of application is mask > add > delete
+# If the config is empty of broken 
+[mask]
+tags = ["PatientID", "PatientName"]
+
+[delete]
+tags = ["PatientComments", "PatientAge", "PatientSex"]
+
+[add]
+tags.PatientIdentityRemoved = "Yes"
+tags.DeidentificationMethod = "DCMRig"
+```
 
 2. Anonymisation
 - [x] Track unique PatientID and assign a UUID per unique ID
