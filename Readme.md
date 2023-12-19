@@ -1,5 +1,7 @@
 # DICOM Toolkit - DICOM corelab tools.
 
+<img src="https://github.com/console-rs/indicatif/blob/main/misc/DEID_TEST_RUN.gif?raw=true">
+
 ### USAGE
 Usage: `dcmrig [OPTIONS] <SUBCOMMAND> <ARGS>`\
 Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
