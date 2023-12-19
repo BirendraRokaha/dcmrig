@@ -1,0 +1,11 @@
+# The chain of application is mask > add > delete
+# If the config is empty of broken 
+[mask]
+tags = ["PatientID", "PatientName"]
+
+[delete]
+tags = ["PatientComments", "PatientAge", "PatientSex"]
+
+[add]
+tags.PatientIdentityRemoved = "Yes"
+tags.DeidentificationMethod = "DCMRig"

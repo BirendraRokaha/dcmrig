@@ -24,7 +24,7 @@ Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 - [x] Pretty output
 - [x] Multithreaded
 - [x] Robust args parser
-- [ ] TOML config file for defining mask, delete and default values for DeID/Anon 
+- [x] TOML config file for defining mask, delete and add dicom tag values for DeID
 
 ---
 1. Deidentification

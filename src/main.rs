@@ -4,6 +4,7 @@ The main entry point into dcmrig.
 
 mod anon;
 mod args;
+mod cookbook_parser;
 mod deid;
 mod sort;
 
@@ -19,6 +20,7 @@ use tracing::{error, warn, Level};
 
 fn app() -> Result<()> {
     let args = ArgsParser::parse();
+
     tracing::subscriber::set_global_default(
         tracing_subscriber::FmtSubscriber::builder()
             .without_time()
@@ -29,6 +31,7 @@ fn app() -> Result<()> {
             })
             .finish(),
     )?;
+
     print_logo();
     // Only executes if one of the 4 subcommands are provided
     match args.action_type {
@@ -53,6 +56,5 @@ fn app() -> Result<()> {
 }
 
 fn main() {
-    // app().unwrap_or_else(|_| error!("Unexpected error!"))
     app().unwrap_or_else(|_| error!("Unexpected error!"))
 }

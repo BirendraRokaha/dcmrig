@@ -212,6 +212,65 @@ pub fn mask_tags_with_id(
     Ok(dcm_obj)
 }
 
+pub fn tags_to_mask(
+    mut dcm_obj: FileDicomObject<InMemDicomObject>,
+    patient_deid: String,
+    mask_config_list: &Vec<String>,
+) -> Result<FileDicomObject<InMemDicomObject>> {
+    for each_tag in mask_config_list {
+        let each_tag_header = match dcm_obj.element_by_name(&each_tag) {
+            Ok(v) => v.header(),
+            Err(_) => continue,
+        };
+        let each_tag_vr = each_tag_header.vr();
+        let each_tag_tag = each_tag_header.tag;
+        dcm_obj.put(DataElement::new(
+            each_tag_tag,
+            each_tag_vr,
+            patient_deid.as_ref(),
+        ));
+    }
+    Ok(dcm_obj)
+}
+
+pub fn tags_to_add(
+    mut dcm_obj: FileDicomObject<InMemDicomObject>,
+    add_config_list: &HashMap<String, String>,
+) -> Result<FileDicomObject<InMemDicomObject>> {
+    for each_element in add_config_list {
+        let each_tag = each_element.0;
+        let each_value = each_element.1;
+        let each_tag_header = match dcm_obj.element_by_name(&each_tag) {
+            Ok(v) => v.header(),
+            Err(_) => {
+                warn!("DELETE TAG: Tag {} not found", each_tag);
+                continue;
+            }
+        };
+        let each_tag_vr = each_tag_header.vr();
+        let each_tag_tag = each_tag_header.tag;
+        dcm_obj.put(DataElement::new(
+            each_tag_tag,
+            each_tag_vr,
+            each_value.as_ref(),
+        ));
+    }
+    Ok(dcm_obj)
+}
+
+pub fn tags_to_delete(
+    mut dcm_obj: FileDicomObject<InMemDicomObject>,
+    delete_config_list: &Vec<String>,
+) -> Result<FileDicomObject<InMemDicomObject>> {
+    for each_tag in delete_config_list {
+        match dcm_obj.remove_element_by_name(each_tag) {
+            Ok(_) => (),
+            Err(_) => warn!("DELETE TAG: Tag {} not found", each_tag),
+        }
+    }
+    Ok(dcm_obj)
+}
+
 // Generate the Dicom filename based on the dicom tags
 pub fn generate_dicom_file_name(
     dicom_tags_values: &HashMap<String, String>,
