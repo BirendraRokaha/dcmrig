@@ -220,7 +220,10 @@ pub fn tags_to_mask(
     for each_tag in mask_config_list {
         let each_tag_header = match dcm_obj.element_by_name(&each_tag) {
             Ok(v) => v.header(),
-            Err(_) => continue,
+            Err(_) => {
+                warn!("Mask Tag: {} is not valid!", each_tag);
+                continue;
+            }
         };
         let each_tag_vr = each_tag_header.vr();
         let each_tag_tag = each_tag_header.tag;
@@ -240,9 +243,7 @@ pub fn tags_to_add(
     for each_element in add_config_list {
         let config_tag = each_element.0;
         let config_value = each_element.1;
-        let tag_builder = DataDictionary::by_name(&StandardDataDictionary, &config_tag).unwrap();
-        let each_tag = tag_builder.tag.inner();
-        let each_vr = tag_builder.vr;
+        let (each_tag, each_vr) = extract_tag_vr_from_str(&config_tag)?;
         dcm_obj.put(DataElement::new(each_tag, each_vr, config_value.as_ref()));
     }
     Ok(dcm_obj)
@@ -255,7 +256,7 @@ pub fn tags_to_delete(
     for each_tag in delete_config_list {
         match dcm_obj.remove_element_by_name(each_tag) {
             Ok(_) => (),
-            Err(_) => warn!("DELETE TAG: Tag {} not found", each_tag),
+            Err(_) => warn!("Delete Tag: {} not valid/found", each_tag),
         }
     }
     Ok(dcm_obj)
@@ -328,6 +329,16 @@ pub fn print_status(
     info!("NON-DCM files: {}", total_non_dcm_files);
     info!("Total {}: {}", action, total_processed);
     Ok(())
+}
+
+pub fn extract_tag_vr_from_str(tag_name: &String) -> Result<(Tag, VR)> {
+    match DataDictionary::by_name(&StandardDataDictionary, &tag_name) {
+        Some(v) => return Ok((v.tag.inner(), v.vr)),
+        None => {
+            warn!("Tag: {} is not valid!", tag_name);
+            return Err(anyhow::Error::msg("message"));
+        }
+    };
 }
 
 //
