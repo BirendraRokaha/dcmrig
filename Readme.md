@@ -7,9 +7,9 @@ Usage: `dcmrig [OPTIONS] <SUBCOMMAND> <ARGS>`\
 Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 
 **sub-commands:**
-- `sort`    [TESTING] Sort the given source with any combination of PatientID, PatientName or Modality
-- `anon`    [TESTING] Anonymize the given source each PatientID will be given a unique AnonID
-- `deid`    [TESTING] Deidentify the given source based on a mapping table
+- `sort`    Sort the given source with any combination of PatientID, PatientName or Modality
+- `anon`    Anonymize the given source each PatientID will be given a unique AnonID
+- `deid`    Deidentify the given source based on a mapping table
 - `report`  [NON FUNCTIONAL] Generate a report for a sorted dataset
 - `help`    Print this message or the help of the given subcommand(s)
 
@@ -37,8 +37,7 @@ Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 - [x] Handle missing tags gracefully > partially complete
 - [x] Derive add, delete, and mask tags from a config Toml file
 
-A sample toml file is created at the users home dir ~/.dcmrig/config.toml during the first execution.
-Mapping table example
+Mapping table example. Only one pair per line is valid.
 ```
 # MASK_ID,PatientID # 
 DeID_001,U1423571
@@ -46,28 +45,39 @@ DeID_002,U3245327
 DeID_003,U6124732
 ```
 
+A sample toml file is created at the users home dir ~/.dcmrig/config.toml during the first execution.
 ```toml
 # The chain of application is mask > add > delete
-# If the config is empty of broken 
+# The tags are case sensitive. They should match the DICOM standard dictionary specification
+# Mask and delete only work with the tags already present in the dicom file
+
+# List of tags that will be masked by the DeID
 [mask]
 tags = ["PatientID", "PatientName"]
 
+# List of tags that will be deleted
 [delete]
-tags = ["PatientComments", "PatientAge", "PatientSex"]
+tags = []
 
+# Dictionary of tags to be added along with their values
 [add]
 tags.PatientIdentityRemoved = "Yes"
 tags.DeidentificationMethod = "DCMRig"
 ```
+Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 
 2. Anonymisation
 - [x] Track unique PatientID and assign a UUID per unique ID
+Example: `dcmrig anon ./source_path ./dest_path`
 
 3. Sort
 - [x] Create Paths from the given list
 - [x] Save files to a generated destination path with the desired filename
 - [x] Sanitize dicom tags for missing data
-- [x] Sort based on PATIENTID, PATENTNAME, MODALITY
+- [x] Sort based on PATIENTID, PATENTNAME, MODALITY. Default is PatientID
+
+Valid Sort order is any combination of INM. Case insensitive.
+Example: `dcmrig sort -s [INM] ./source_path ./dest_path`
 
 4. Report
 - [ ] Sorted Data needed

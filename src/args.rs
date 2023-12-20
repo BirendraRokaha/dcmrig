@@ -17,13 +17,13 @@ pub struct ArgsParser {
 
 #[derive(Debug, Subcommand)]
 pub enum EntityType {
-    /// [TESTING PHASE] Sort the given source with any combination of PatientID, PatientName or Modality
+    /// Sort the given source with any combination of PatientID, PatientName or Modality
     Sort(SortCommand),
-    /// [TESTING PHASE] Anonymize the given source each PatientID will be given a unique AnonID.
+    /// Anonymize the given source each PatientID will be given a unique AnonID.
     Anon(AnonCommand),
-    /// [TESTING PHASE] Deidentify the given source based on a mapping table
+    /// Deidentify the given source based on a mapping table
     Deid(DeidCommand),
-    /// [UNDER CONSTRUCTION] [NON FUNCTIONAL] Generate a report for a sorted dataset
+    /// [NON FUNCTIONAL] Generate a report for a sorted dataset
     Report(ReportCommand),
 }
 
