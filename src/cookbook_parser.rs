@@ -1,4 +1,6 @@
 use anyhow::Result;
+use dicom::core::DataDictionary;
+use dicom::object::StandardDataDictionary;
 use home::{self, home_dir};
 use serde::Deserialize;
 use std::io::Write;
@@ -90,6 +92,34 @@ fn check_for_config() -> Result<String> {
     Ok(file_content)
 }
 
+fn check_valid_tag_vec(tag_vec: Vec<String>) -> Vec<String> {
+    let mut tags_vec = tag_vec.clone();
+    for each in tag_vec.iter().enumerate() {
+        match DataDictionary::by_name(&StandardDataDictionary, &each.1) {
+            Some(_) => (),
+            None => {
+                tags_vec.remove(each.0);
+                warn!("Tag {} is not valid", each.1)
+            }
+        }
+    }
+    tags_vec
+}
+
+fn check_valid_tag_hashmap(tag_hash: HashMap<String, String>) -> HashMap<String, String> {
+    let mut tags_hash_m = tag_hash.clone();
+    for each in tag_hash {
+        match DataDictionary::by_name(&StandardDataDictionary, &each.0) {
+            Some(_) => (),
+            None => {
+                tags_hash_m.remove(&each.0);
+                warn!("Tag {} is not valid", each.0)
+            }
+        }
+    }
+    tags_hash_m
+}
+
 pub fn parse_toml_config() -> Result<(Vec<String>, HashMap<String, String>, Vec<String>)> {
     let file_content = check_for_config()?;
     let toml_des: CookBook =
@@ -103,23 +133,41 @@ pub fn parse_toml_config() -> Result<(Vec<String>, HashMap<String, String>, Vec<
         .unwrap_or_else(|| MaskDelTags::default())
         .tags;
 
-    if mask_list.is_empty() {
-        warn!("The Mask config is empty or corrupted")
-    } else {
-        info!("Tags to mask {:?}", mask_list);
-    }
+    let mask_list = match mask_list.is_empty() {
+        true => {
+            warn!("The Mask config is empty or corrupted");
+            MaskDelTags::default().tags
+        }
+        false => {
+            let mask_list = check_valid_tag_vec(mask_list);
+            info!("Tags to mask {:?}", mask_list);
+            mask_list
+        }
+    };
 
-    if delete_list.is_empty() {
-        warn!("The Delete config is empty or corrupted")
-    } else {
-        info!("Tags to delete {:?}", delete_list);
-    }
+    let delete_list = match delete_list.is_empty() {
+        true => {
+            warn!("The Delete config is empty or corrupted");
+            MaskDelTags::default().tags
+        }
+        false => {
+            let delete_list = check_valid_tag_vec(delete_list);
+            info!("Tags to delete {:?}", delete_list);
+            delete_list
+        }
+    };
 
-    if add_list.is_empty() {
-        warn!("The Add config is empty or corrupted")
-    } else {
-        info!("Tags to add {:?}", add_list);
-    }
+    let add_list = match add_list.is_empty() {
+        true => {
+            warn!("The Add config is empty or corrupted");
+            AddTags::default().tags
+        }
+        false => {
+            let add_list = check_valid_tag_hashmap(add_list);
+            info!("Tags to add {:?}", add_list);
+            add_list
+        }
+    };
 
     Ok((mask_list, add_list, delete_list))
 }
