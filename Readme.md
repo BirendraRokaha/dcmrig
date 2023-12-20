@@ -22,6 +22,8 @@ Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 ### CORE
 - [x] Read all DICOM files from a given source
 - [x] Create and save a new dicom file in the desired location
+- [ ] Handle private tags
+
 ### Nice to have
 - [x] Pretty output
 - [x] Multithreaded
@@ -36,6 +38,13 @@ Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 - [x] Derive add, delete, and mask tags from a config Toml file
 
 A sample toml file is created at the users home dir ~/.dcmrig/config.toml during the first execution.
+Mapping table example
+```
+# MASK_ID,PatientID # 
+DeID_001,U1423571
+DeID_002,U3245327
+DeID_003,U6124732
+```
 
 ```toml
 # The chain of application is mask > add > delete

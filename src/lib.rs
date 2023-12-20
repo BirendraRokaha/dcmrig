@@ -8,9 +8,9 @@ use std::{
 
 use anyhow::Result;
 use dicom::{
-    core::{DataElement, VR},
+    core::{DataDictionary, DataElement, VR},
     dictionary_std::tags,
-    object::{FileDicomObject, InMemDicomObject, Tag},
+    object::{FileDicomObject, InMemDicomObject, StandardDataDictionary, Tag},
 };
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::iter::{ParallelBridge, ParallelIterator};
@@ -238,22 +238,12 @@ pub fn tags_to_add(
     add_config_list: &HashMap<String, String>,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
     for each_element in add_config_list {
-        let each_tag = each_element.0;
-        let each_value = each_element.1;
-        let each_tag_header = match dcm_obj.element_by_name(&each_tag) {
-            Ok(v) => v.header(),
-            Err(_) => {
-                warn!("DELETE TAG: Tag {} not found", each_tag);
-                continue;
-            }
-        };
-        let each_tag_vr = each_tag_header.vr();
-        let each_tag_tag = each_tag_header.tag;
-        dcm_obj.put(DataElement::new(
-            each_tag_tag,
-            each_tag_vr,
-            each_value.as_ref(),
-        ));
+        let config_tag = each_element.0;
+        let config_value = each_element.1;
+        let tag_builder = DataDictionary::by_name(&StandardDataDictionary, &config_tag).unwrap();
+        let each_tag = tag_builder.tag.inner();
+        let each_vr = tag_builder.vr;
+        dcm_obj.put(DataElement::new(each_tag, each_vr, config_value.as_ref()));
     }
     Ok(dcm_obj)
 }

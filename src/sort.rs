@@ -25,6 +25,7 @@ pub fn dicom_sort(
     let sort_order_vec = generate_sort_order(sort_order).unwrap();
     let failed_case: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
     let non_dcm_cases: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
+    info!("Sort Order {:?}", sort_order_vec);
 
     // Main loop
     all_files
@@ -128,7 +129,7 @@ fn generate_order_level(
         order_level = format!(
             "{}{}/",
             order_level,
-            dicom_tags_values.get(each.as_str()).unwrap().trim()
+            replace_non_alphanumeric(dicom_tags_values.get(each.as_str()).unwrap().trim())
         )
     }
     Ok(order_level)

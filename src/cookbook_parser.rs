@@ -45,12 +45,18 @@ impl AddTags {
 fn create_default_config(config_file_path: &String) -> Result<String> {
     warn!("Config file not found, Creating a default config file");
     let default_config_raw = r#"# The chain of application is mask > add > delete
+# The tags are case sensitive. They should match the DICOM standard dictionary specification
+# Mask and delete only work with the tags already present in the dicom file
+
+# List of tags that will be masked by the DeID
 [mask]
 tags = ["PatientID", "PatientName"]
 
+# List of tags that will be deleted
 [delete]
 tags = []
 
+# Dictionary of tags to be added along with their values
 [add]
 tags.PatientIdentityRemoved = "Yes"
 tags.DeidentificationMethod = "DCMRig"
