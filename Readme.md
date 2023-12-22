@@ -1,4 +1,4 @@
-# DICOM Toolkit - DICOM corelab tools.
+# DICOM Toolkit - DICOM corelab tools in 🦀rust🦀
 
 <img src="https://github.com/BirendraRokaha/dcmrig/blob/main/misc/DEID_TEST_RUN.gif">
 
@@ -45,7 +45,7 @@ DeID_002,U3245327
 DeID_003,U6124732
 ```
 
-A sample toml file is created at the users home dir ~/.dcmrig/config.toml during the first execution.
+A sample cookbook toml file is created at the users home dir ~/.dcmrig/cookbook.toml during the first execution.
 ```toml
 # The chain of application is mask > add > delete
 # The tags are case sensitive. They should match the DICOM standard dictionary specification
@@ -67,7 +67,7 @@ tags.DeidentificationMethod = "DCMRig"
 Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 
 2. Anonymisation
-- [x] Track unique PatientID and assign a UUID per unique ID
+- [x] Track unique PatientID and assign a UUID per unique ID\
 Example: `dcmrig anon ./source_path ./dest_path`
 
 3. Sort
@@ -76,7 +76,7 @@ Example: `dcmrig anon ./source_path ./dest_path`
 - [x] Sanitize dicom tags for missing data
 - [x] Sort based on PATIENTID, PATENTNAME, MODALITY. Default is PatientID
 
-Valid Sort order is any combination of INM. Case insensitive.
+Valid Sort order is any combination of INM. Case insensitive.\
 Example: `dcmrig sort -s [INM] ./source_path ./dest_path`
 
 4. Report

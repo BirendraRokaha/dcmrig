@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::Result;
 use dicom::{
-    core::{DataDictionary, DataElement, VR},
+    core::{dictionary::DataDictionaryEntryRef, DataDictionary, DataElement, VR},
     dictionary_std::tags,
     object::{FileDicomObject, InMemDicomObject, StandardDataDictionary, Tag},
 };
@@ -215,23 +215,19 @@ pub fn mask_tags_with_id(
 pub fn tags_to_mask(
     mut dcm_obj: FileDicomObject<InMemDicomObject>,
     patient_deid: String,
-    mask_config_list: &Vec<String>,
+    mask_config_list: &Vec<DataDictionaryEntryRef<'static>>,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
     for each_tag in mask_config_list {
-        let each_tag_header = match dcm_obj.element_by_name(&each_tag) {
-            Ok(v) => v.header(),
-            Err(_) => {
-                warn!("Mask Tag: {} is not valid!", each_tag);
-                continue;
-            }
-        };
-        let each_tag_vr = each_tag_header.vr();
-        let each_tag_tag = each_tag_header.tag;
-        dcm_obj.put(DataElement::new(
+        let each_tag_tag = each_tag.tag.inner();
+        let each_tag_vr = each_tag.vr;
+        match dcm_obj.put(DataElement::new(
             each_tag_tag,
             each_tag_vr,
             patient_deid.as_ref(),
-        ));
+        )) {
+            Some(_) => (),
+            None => warn!("Mask Tag : Failed to mask tag {:?}", each_tag_tag),
+        }
     }
     Ok(dcm_obj)
 }
@@ -251,12 +247,14 @@ pub fn tags_to_add(
 
 pub fn tags_to_delete(
     mut dcm_obj: FileDicomObject<InMemDicomObject>,
-    delete_config_list: &Vec<String>,
+    delete_config_list: &Vec<DataDictionaryEntryRef<'static>>,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
     for each_tag in delete_config_list {
-        match dcm_obj.remove_element_by_name(each_tag) {
-            Ok(_) => (),
-            Err(_) => warn!("Delete Tag: {} not valid/found", each_tag),
+        match dcm_obj.remove_element(each_tag.tag.inner()) {
+            // Ok(_) => (),
+            // Err(_) => warn!("Delete Tag: {} not valid/found", each_tag),
+            true => (),
+            false => warn!("Delete Tag: {:?} not valid/found", each_tag.tag.inner()),
         }
     }
     Ok(dcm_obj)

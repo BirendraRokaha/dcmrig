@@ -1,7 +1,10 @@
-use crate::cookbook_parser::parse_toml_config;
+use crate::cookbook_parser::parse_toml_cookbook;
 use anyhow::{bail, Error, Result};
 use dcmrig_rs::*;
-use dicom::object::{open_file, FileDicomObject, InMemDicomObject};
+use dicom::{
+    core::dictionary::DataDictionaryEntryRef,
+    object::{open_file, FileDicomObject, InMemDicomObject},
+};
 use rayon::prelude::*;
 use std::{
     collections::HashMap,
@@ -26,7 +29,7 @@ pub fn dicom_deid(
     );
 
     // Get cookbook configs
-    let (mask_config, add_config, delete_config) = parse_toml_config()?;
+    let (mask_config, add_config, delete_config) = parse_toml_cookbook()?;
 
     // Set up required variables
     let (all_files, total_len, pb) = preprocessing_setup(&source_path, &destination_path)?;
@@ -86,8 +89,8 @@ fn deid_each_dcm_file(
     dcm_obj: &FileDicomObject<InMemDicomObject>,
     destination_path: &PathBuf,
     mapping_dict: &HashMap<String, String>,
-    mask_config_list: &Vec<String>,
-    delete_config_list: &Vec<String>,
+    mask_config_list: &Vec<DataDictionaryEntryRef<'static>>,
+    delete_config_list: &Vec<DataDictionaryEntryRef<'static>>,
     add_config_list: &HashMap<String, String>,
 ) -> Result<(), Error> {
     let patient_id = dcm_obj.element_by_name("PatientID")?.to_str()?.to_string();
