@@ -1,4 +1,4 @@
-# DICOM Toolkit - DICOM corelab tools in 🦀rust🦀
+# DCMrig - DICOM DeIdentification tools in 🦀rust🦀
 
 <img src="https://github.com/BirendraRokaha/dcmrig/blob/main/misc/DEID_TEST_RUN.gif">
 
@@ -18,9 +18,20 @@ Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 - -h, --help     Print help
 - -V, --version  Print version
 
+## Install
+Needs cargo
+```
+git clone https://github.com/BirendraRokaha/dcmrig.git
+cd dcmrig
+cargo build --release
+```
+The binary will be generated at `target/release/dcmrig`
+
+---
 ## TODO
 ### CORE
 - [x] Read all DICOM files from a given source
+- [x] Parse the DICOM file and get the metadata by TagID or Tag name
 - [x] Create and save a new dicom file in the desired location
 - [ ] Handle private tags
 
@@ -30,12 +41,18 @@ Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 - [x] Robust args parser
 - [x] TOML config file for defining mask, delete and add dicom tag values for DeID
 
+### Roadmap
+- [ ] [CookBook] Choose the tag as the identifier for DeID or Anon 
+- [ ] [CookBook] In the Add section, Select other tags or combination of other tags as teh value
+- [ ] [CookBook] Selection to keep or remove private tags
+- [ ] [CookBook] Add VR as the field to add/remove/mask
+
 ---
 1. Deidentification
 - [x] Read from a mapping table to create a mapping dictionary
+- [x] Derive add, delete, and mask tags from a config Toml file
 - [x] Match data with mapping table and change dicom tags
 - [x] Handle missing tags gracefully > partially complete
-- [x] Derive add, delete, and mask tags from a config Toml file
 
 Mapping table example. Only one pair per line is valid.
 ```

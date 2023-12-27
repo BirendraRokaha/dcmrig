@@ -251,8 +251,6 @@ pub fn tags_to_delete(
 ) -> Result<FileDicomObject<InMemDicomObject>> {
     for each_tag in delete_config_list {
         match dcm_obj.remove_element(each_tag.tag.inner()) {
-            // Ok(_) => (),
-            // Err(_) => warn!("Delete Tag: {} not valid/found", each_tag),
             true => (),
             false => warn!("Delete Tag: {:?} not valid/found", each_tag.tag.inner()),
         }
@@ -334,7 +332,7 @@ pub fn extract_tag_vr_from_str(tag_name: &String) -> Result<(Tag, VR)> {
         Some(v) => return Ok((v.tag.inner(), v.vr)),
         None => {
             warn!("Tag: {} is not valid!", tag_name);
-            return Err(anyhow::Error::msg("message"));
+            return Err(anyhow::Error::msg("Tag Not Valid, VR not found!!"));
         }
     };
 }

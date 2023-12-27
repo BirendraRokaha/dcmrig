@@ -55,6 +55,7 @@ fn app() -> Result<()> {
     Ok(())
 }
 
-fn main() {
-    app().unwrap_or_else(|_| error!("Unexpected error!"))
+fn main() -> Result<()> {
+    app().unwrap_or_else(|_| error!("Unexpected error!"));
+    Ok(())
 }
