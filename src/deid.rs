@@ -29,7 +29,7 @@ pub fn dicom_deid(
     );
 
     // Get cookbook configs
-    let (mask_config, add_config, delete_config) = parse_toml_cookbook()?;
+    let (match_id, mask_config, add_config, delete_config) = parse_toml_cookbook()?;
 
     // Set up required variables
     let (all_files, total_len, pb) = preprocessing_setup(&source_path, &destination_path)?;
@@ -50,6 +50,7 @@ pub fn dicom_deid(
                     &dcm_obj,
                     &destination_path,
                     &mapping_dict,
+                    &match_id,
                     &mask_config,
                     &delete_config,
                     &add_config,
@@ -89,15 +90,22 @@ fn deid_each_dcm_file(
     dcm_obj: &FileDicomObject<InMemDicomObject>,
     destination_path: &PathBuf,
     mapping_dict: &HashMap<String, String>,
+    match_id: &DataDictionaryEntryRef<'static>,
     mask_config_list: &Vec<DataDictionaryEntryRef<'static>>,
     delete_config_list: &Vec<DataDictionaryEntryRef<'static>>,
     add_config_list: &HashMap<String, String>,
 ) -> Result<(), Error> {
-    let patient_id = dcm_obj.element_by_name("PatientID")?.to_str()?.to_string();
-    let patient_deid = match mapping_dict.get(&patient_id) {
+    let tag_to_match = dcm_obj.element(match_id.tag.inner())?.to_str()?.to_string();
+    // let patient_id = dcm_obj.element_by_name("PatientID")?.to_str()?.to_string();
+    let patient_deid = match mapping_dict.get(&tag_to_match) {
         Some(deid) => deid.to_string(),
-        None => bail!("DeID for {patient_id} is not found"),
+        None => "".to_string(),
     };
+
+    if patient_deid.is_empty() {
+        debug!("DeID for {tag_to_match} is not found");
+        return Ok(());
+    }
 
     let new_dicom_object = match mask_config_list.is_empty() {
         true => dcm_obj.clone(),

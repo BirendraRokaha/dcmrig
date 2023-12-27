@@ -2,6 +2,11 @@
 # The tags are case sensitive. They should match the DICOM standard dictionary specification
 # Mask and delete only work with the tags already present in the dicom file
 
+# Tags are case sensitive. Need to follow the DICOM Stadndard dictionary
+# Unique ID to match on, PatientID and PatientName tags suggested. It will default to PatientID
+[matchid]
+tag = "PatientID"
+
 # List of tags that will be masked by the DeID
 [mask]
 tags = ["PatientID", "PatientName"]

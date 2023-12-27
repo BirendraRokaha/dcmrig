@@ -42,7 +42,7 @@ The binary will be generated at `target/release/dcmrig`
 - [x] TOML config file for defining mask, delete and add dicom tag values for DeID
 
 ### Roadmap
-- [ ] [CookBook] Choose the tag as the identifier for DeID or Anon 
+- [x] [CookBook] Choose the tag as the identifier for DeID or Anon > Partially complete. Need to add for Anon
 - [ ] [CookBook] In the Add section, Select other tags or combination of other tags as teh value
 - [ ] [CookBook] Selection to keep or remove private tags
 - [ ] [CookBook] Add VR as the field to add/remove/mask
@@ -64,9 +64,10 @@ DeID_003,U6124732
 
 A sample cookbook toml file is created at the users home dir ~/.dcmrig/cookbook.toml during the first execution.
 ```toml
-# The chain of application is mask > add > delete
-# The tags are case sensitive. They should match the DICOM standard dictionary specification
-# Mask and delete only work with the tags already present in the dicom file
+# Tags are case sensitive. Need to follow the DICOM Stadndard dictionary
+# Unique ID to match on, PatientID and PatientName tags suggested. It will default to PatientID
+[matchid]
+tag = "PatientID"
 
 # List of tags that will be masked by the DeID
 [mask]

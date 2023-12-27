@@ -15,9 +15,15 @@ use tracing::{error, info, warn};
 
 #[derive(Debug, Deserialize)]
 struct CookBook {
+    matchid: Option<MatchIDTag>,
     mask: Option<MaskDelTags>,
     delete: Option<MaskDelTags>,
     add: Option<AddTags>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MatchIDTag {
+    tag: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -50,6 +56,11 @@ fn create_default_cookbook(cookbook_file_path: &String) -> Result<String> {
     let default_cookbook_raw = r#"# The chain of application is mask > add > delete
 # The tags are case sensitive. They should match the DICOM standard dictionary specification
 # Mask and delete only work with the tags already present in the dicom file
+
+# Tags are case sensitive. Need to follow the DICOM Stadndard dictionary
+# Unique ID to match on, PatientID and PatientName tags suggested. It will default to PatientID
+[matchid]
+tag = "PatientID"
 
 # List of tags that will be masked by the DeID
 [mask]
@@ -124,6 +135,7 @@ fn check_valid_tag_hashmap(tag_hash: HashMap<String, String>) -> HashMap<String,
 }
 
 pub fn parse_toml_cookbook() -> Result<(
+    DataDictionaryEntryRef<'static>,
     Vec<DataDictionaryEntryRef<'static>>,
     HashMap<String, String>,
     Vec<DataDictionaryEntryRef<'static>>,
@@ -131,14 +143,30 @@ pub fn parse_toml_cookbook() -> Result<(
     let file_content = check_for_cookbook()?;
     let toml_des: CookBook =
         toml::from_str(&file_content).expect("Failed to deserialize Cargo.toml");
+
+    // Setting up variables
+    // let matchid = toml_des.matchid. .unwrap_or("PatientID".to_string());
+    let matchid = toml_des.matchid.unwrap_or_else(|| MatchIDTag {
+        tag: "PatientID".to_string(),
+    });
     let mask_list = toml_des.mask.unwrap_or_else(|| MaskDelTags::default()).tags;
-
     let add_list = toml_des.add.unwrap_or_else(|| AddTags::default()).tags;
-
     let delete_list = toml_des
         .delete
         .unwrap_or_else(|| MaskDelTags::default())
         .tags;
+
+    // Validating the lists
+    info!("Checking MatchID tag");
+    let matchid = match matchid.tag.as_str() {
+        "PatientID" => DataDictionary::by_name(&StandardDataDictionary, "PatientID").unwrap(),
+        "PatientName" => DataDictionary::by_name(&StandardDataDictionary, "PatientName").unwrap(),
+        &_ => {
+            warn!("MatchID empty or corrupted. PatientID will be used as default");
+            DataDictionary::by_name(&StandardDataDictionary, "PatientID").unwrap()
+        }
+    };
+    info!("MatchID > {}", matchid.alias);
 
     let mask_list = match mask_list.is_empty() {
         true => {
@@ -190,5 +218,5 @@ pub fn parse_toml_cookbook() -> Result<(
         }
     };
 
-    Ok((mask_list, add_list, delete_list))
+    Ok((matchid.to_owned(), mask_list, add_list, delete_list))
 }
