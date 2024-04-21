@@ -54,12 +54,12 @@ pub fn dicom_deid(
                 deid_each_dcm_file(
                     &dcm_obj,
                     &destination_path,
-                    &mapping_dict,
-                    &match_id,
-                    &mask_config,
-                    &delete_config,
-                    &add_config,
-                    &private_tags_del,
+                    mapping_dict.clone(),
+                    match_id.clone(),
+                    mask_config.clone(),
+                    delete_config.clone(),
+                    add_config.clone(),
+                    private_tags_del.clone(),
                     wg.clone(),
                 )
                 .unwrap_or_else(|_| {
@@ -97,12 +97,12 @@ pub fn dicom_deid(
 fn deid_each_dcm_file(
     dcm_obj: &FileDicomObject<InMemDicomObject>,
     destination_path: &PathBuf,
-    mapping_dict: &HashMap<String, String>,
-    match_id: &DataDictionaryEntryRef<'static>,
-    mask_config_list: &Vec<DataDictionaryEntryRef<'static>>,
-    delete_config_list: &Vec<DataDictionaryEntryRef<'static>>,
-    add_config_list: &HashMap<String, String>,
-    private_tags_del: &bool,
+    mapping_dict: HashMap<String, String>,
+    match_id: DataDictionaryEntryRef<'static>,
+    mask_config_list: Vec<DataDictionaryEntryRef<'static>>,
+    delete_config_list: Vec<DataDictionaryEntryRef<'static>>,
+    add_config_list: HashMap<String, String>,
+    private_tags_del: bool,
     wg: WaitGroup,
 ) -> Result<(), Error> {
     let tag_to_match = dcm_obj.element(match_id.tag.inner())?.to_str()?.to_string();

@@ -220,7 +220,7 @@ pub fn mask_tags_with_id(
 pub fn tags_to_mask(
     mut dcm_obj: FileDicomObject<InMemDicomObject>,
     patient_deid: String,
-    mask_config_list: &Vec<DataDictionaryEntryRef<'static>>,
+    mask_config_list: Vec<DataDictionaryEntryRef<'static>>,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
     for each_tag in mask_config_list {
         let each_tag_tag = each_tag.tag.inner();
@@ -239,7 +239,7 @@ pub fn tags_to_mask(
 
 pub fn tags_to_add(
     mut dcm_obj: FileDicomObject<InMemDicomObject>,
-    add_config_list: &HashMap<String, String>,
+    add_config_list: HashMap<String, String>,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
     for each_element in add_config_list {
         let config_tag = each_element.0;
@@ -252,7 +252,7 @@ pub fn tags_to_add(
 
 pub fn tags_to_delete(
     mut dcm_obj: FileDicomObject<InMemDicomObject>,
-    delete_config_list: &Vec<DataDictionaryEntryRef<'static>>,
+    delete_config_list: Vec<DataDictionaryEntryRef<'static>>,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
     for each_tag in delete_config_list {
         match dcm_obj.remove_element(each_tag.tag.inner()) {
