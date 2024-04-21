@@ -1,4 +1,5 @@
 use anyhow::Result;
+use crossbeam::sync::WaitGroup;
 use dcmrig_rs::*;
 use dicom::{
     core::{DataElement, VR},
@@ -26,7 +27,7 @@ pub fn dicom_anon(source_path: PathBuf, destination_path: PathBuf) -> Result<()>
     let failed_case: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
     let non_dcm_cases: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
     let anon_id_tracker: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
-
+    let wg = WaitGroup::new();
     // Main Loop
     all_files
         .par_iter()
@@ -34,11 +35,12 @@ pub fn dicom_anon(source_path: PathBuf, destination_path: PathBuf) -> Result<()>
         .for_each(|(_index, working_path)| {
             if let Ok(dcm_obj) = open_file(working_path.path()) {
                 let map_clone = Arc::clone(&anon_id_tracker);
-                anon_each_dcm_file(&dcm_obj, &destination_path, map_clone).unwrap_or_else(|_| {
-                    let mut map = failed_case.lock().unwrap();
-                    *map += 1;
-                    error!("Can't anon {:#?}", &working_path.file_name());
-                });
+                anon_each_dcm_file(&dcm_obj, &destination_path, map_clone, wg.clone())
+                    .unwrap_or_else(|_| {
+                        let mut map = failed_case.lock().unwrap();
+                        *map += 1;
+                        error!("Can't anon {:#?}", &working_path.file_name());
+                    });
             } else {
                 let mut map = non_dcm_cases.lock().unwrap();
                 *map += 1;
@@ -56,7 +58,7 @@ pub fn dicom_anon(source_path: PathBuf, destination_path: PathBuf) -> Result<()>
         "Anon".to_string(),
     )
     .unwrap();
-
+    wg.wait();
     info!("DICOM Anon complete!");
     Ok(())
 }
@@ -65,6 +67,7 @@ fn anon_each_dcm_file(
     dcm_obj: &FileDicomObject<InMemDicomObject>,
     destination_path: &PathBuf,
     map_clone: Arc<Mutex<HashMap<std::string::String, std::string::String>>>,
+    wg: WaitGroup,
 ) -> Result<()> {
     let patient_id = dcm_obj.element_by_name("PatientID")?.to_str()?.to_string();
     let mut map = map_clone.lock().unwrap();
@@ -80,11 +83,20 @@ fn anon_each_dcm_file(
     new_dicom_object = dicom_anon_date_time(new_dicom_object)?;
 
     let dicom_tags_values: HashMap<String, String> = get_sanitized_tag_values(&new_dicom_object)?;
-    let file_name = generate_dicom_file_name(&dicom_tags_values, "ANON".to_string())?;
-    let dir_path = generate_dicom_file_path(dicom_tags_values, &destination_path)?;
-    let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
-    debug!("Saving file: {} to: {}", file_name, dir_path);
-    new_dicom_object.write_to_file(full_path)?;
+
+    let new_dp = destination_path.clone();
+    let dcm_obj_clone = new_dicom_object.clone();
+    rayon::spawn(move || {
+        let file_name =
+            generate_dicom_file_name(&dicom_tags_values, "ANON".to_string()).expect("msg");
+        let dir_path = generate_dicom_file_path(dicom_tags_values, &new_dp).expect("msg");
+        let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
+        debug!("Saving file: {} to: {}", file_name, dir_path);
+        dcm_obj_clone
+            .write_to_file(full_path)
+            .expect("Failed to save file");
+        drop(wg);
+    });
     Ok(())
 }
 

@@ -16,8 +16,8 @@ use tracing::{error, info, warn};
 #[derive(Debug, Deserialize)]
 struct CookBook {
     matchid: Option<MatchIDTag>,
-    mask: Option<MaskDelTags>,
-    delete: Option<MaskDelTags>,
+    mask: Option<MaskTags>,
+    delete: Option<DelTags>,
     add: Option<AddTags>,
 }
 
@@ -26,15 +26,29 @@ struct MatchIDTag {
     tag: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct MaskDelTags {
+#[derive(Debug, Deserialize, Clone)]
+struct MaskTags {
     tags: Vec<String>,
 }
 
-impl MaskDelTags {
+impl MaskTags {
     fn default() -> Self {
-        // let default_v = vec!["PatientID".to_string()];
-        MaskDelTags { tags: Vec::new() }
+        MaskTags { tags: Vec::new() }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+struct DelTags {
+    tags: Vec<String>,
+    private_tags: bool,
+}
+
+impl DelTags {
+    fn default() -> Self {
+        DelTags {
+            tags: Vec::new(),
+            private_tags: false,
+        }
     }
 }
 
@@ -53,7 +67,7 @@ impl AddTags {
 
 fn create_default_cookbook(cookbook_file_path: &String) -> Result<String> {
     warn!("Cookbook file not found, Creating a default cookbook file");
-    let default_cookbook_raw = r#"# The chain of application is mask > add > delete
+    let default_cookbook_raw = r#"#The chain of application is mask > add > delete
 # The tags are case sensitive. They should match the DICOM standard dictionary specification
 # Mask and delete only work with the tags already present in the dicom file
 
@@ -68,7 +82,8 @@ tags = ["PatientID", "PatientName"]
 
 # List of tags that will be deleted
 [delete]
-tags = []
+tags = ["InstitutionalDepartmentName"]
+private_tags = false
 
 # Dictionary of tags to be added along with their values
 [add]
@@ -139,22 +154,30 @@ pub fn parse_toml_cookbook() -> Result<(
     Vec<DataDictionaryEntryRef<'static>>,
     HashMap<String, String>,
     Vec<DataDictionaryEntryRef<'static>>,
+    bool,
 )> {
     let file_content = check_for_cookbook()?;
     let toml_des: CookBook =
         toml::from_str(&file_content).expect("Failed to deserialize Cargo.toml");
 
     // Setting up variables
-    // let matchid = toml_des.matchid. .unwrap_or("PatientID".to_string());
     let matchid = toml_des.matchid.unwrap_or_else(|| MatchIDTag {
         tag: "PatientID".to_string(),
     });
-    let mask_list = toml_des.mask.unwrap_or_else(|| MaskDelTags::default()).tags;
+    let mask_list = toml_des.mask.unwrap_or_else(|| MaskTags::default()).tags;
     let add_list = toml_des.add.unwrap_or_else(|| AddTags::default()).tags;
+
     let delete_list = toml_des
         .delete
-        .unwrap_or_else(|| MaskDelTags::default())
+        .clone()
+        .unwrap_or_else(|| DelTags::default())
         .tags;
+    let private_tags_del = toml_des
+        .delete
+        .unwrap_or_else(|| DelTags::default())
+        .private_tags;
+    // let delete_list: Vec<String> = vec![];
+    // let private_tags_del = true;
 
     // Validating the lists
     info!("Checking MatchID tag");
@@ -218,5 +241,11 @@ pub fn parse_toml_cookbook() -> Result<(
         }
     };
 
-    Ok((matchid.to_owned(), mask_list, add_list, delete_list))
+    Ok((
+        matchid.to_owned(),
+        mask_list,
+        add_list,
+        delete_list,
+        private_tags_del,
+    ))
 }

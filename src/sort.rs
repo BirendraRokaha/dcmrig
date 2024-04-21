@@ -1,4 +1,5 @@
 use anyhow::Result;
+use crossbeam::sync::WaitGroup;
 use dcmrig_rs::*;
 use dicom::object::{open_file, FileDicomObject, InMemDicomObject};
 use rayon::prelude::*;
@@ -27,19 +28,19 @@ pub fn dicom_sort(
     let non_dcm_cases: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
     info!("Sort Order {:?}", sort_order_vec);
 
+    let wg = WaitGroup::new();
     // Main loop
     all_files
         .par_iter()
         .enumerate()
         .for_each(|(_index, working_path)| {
             if let Ok(dcm_obj) = open_file(working_path.path()) {
-                sort_each_dcm_file(&dcm_obj, &destination_path, &sort_order_vec).unwrap_or_else(
-                    |_| {
+                sort_each_dcm_file(&dcm_obj, &destination_path, &sort_order_vec, wg.clone())
+                    .unwrap_or_else(|_| {
                         let mut map = failed_case.lock().unwrap();
                         *map += 1;
                         error!("Cannot sort {:#?}", &working_path.file_name())
-                    },
-                );
+                    });
             } else {
                 let mut map = non_dcm_cases.lock().unwrap();
                 *map += 1;
@@ -57,7 +58,7 @@ pub fn dicom_sort(
         "Sorted".to_string(),
     )
     .unwrap();
-
+    wg.wait();
     info!("DICOM Sort complete!");
     Ok(())
 }
@@ -67,6 +68,7 @@ fn sort_each_dcm_file(
     dcm_obj: &FileDicomObject<InMemDicomObject>,
     destination_path: &PathBuf,
     sort_order_vec: &Vec<String>,
+    wg: WaitGroup,
 ) -> Result<()> {
     let dicom_tags_values = get_sanitized_tag_values(&dcm_obj)?;
     let order_level = generate_order_level(sort_order_vec, &dicom_tags_values);
@@ -94,10 +96,20 @@ fn sort_each_dcm_file(
         dicom_tags_values.get("SeriesNumber").unwrap(),
         replace_non_alphanumeric(dicom_tags_values.get("SeriesDescription").unwrap().trim())
     );
-    create_target_dir(&dir_path)?;
-    let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
-    debug!("Saving file: {} to: {}", file_name, dir_path);
-    dcm_obj.write_to_file(full_path)?;
+    // create_target_dir(&dir_path)?;
+    // let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
+    // debug!("Saving file: {} to: {}", file_name, dir_path);
+    // dcm_obj.write_to_file(full_path)?;
+    let dcm_obj_clone = dcm_obj.clone();
+    rayon::spawn(move || {
+        create_target_dir(&dir_path).expect("Failed to created target dir");
+        let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
+        debug!("Saving file: {} to: {}", file_name, dir_path);
+        dcm_obj_clone
+            .write_to_file(full_path)
+            .expect("Failed to save file");
+        drop(wg);
+    });
     Ok(())
 }
 

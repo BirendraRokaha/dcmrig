@@ -1,10 +1,13 @@
 use crate::cookbook_parser::parse_toml_cookbook;
 use anyhow::{bail, Error, Result};
+use crossbeam::sync::WaitGroup;
 use dcmrig_rs::*;
+
 use dicom::{
-    core::dictionary::DataDictionaryEntryRef,
+    core::{dictionary::DataDictionaryEntryRef, VR},
     object::{open_file, FileDicomObject, InMemDicomObject},
 };
+
 use rayon::prelude::*;
 use std::{
     collections::HashMap,
@@ -29,7 +32,8 @@ pub fn dicom_deid(
     );
 
     // Get cookbook configs
-    let (match_id, mask_config, add_config, delete_config) = parse_toml_cookbook()?;
+    let (match_id, mask_config, add_config, delete_config, private_tags_del) =
+        parse_toml_cookbook()?;
 
     // Set up required variables
     let (all_files, total_len, pb) = preprocessing_setup(&source_path, &destination_path)?;
@@ -41,6 +45,7 @@ pub fn dicom_deid(
     });
 
     // Main Loop
+    let wg = WaitGroup::new();
     all_files
         .par_iter()
         .enumerate()
@@ -54,6 +59,8 @@ pub fn dicom_deid(
                     &mask_config,
                     &delete_config,
                     &add_config,
+                    &private_tags_del,
+                    wg.clone(),
                 )
                 .unwrap_or_else(|_| {
                     let mut map = failed_case.lock().unwrap();
@@ -77,7 +84,8 @@ pub fn dicom_deid(
         "DeID".to_string(),
     )
     .unwrap();
-
+    info!("Waiting for all threads to complete");
+    wg.wait();
     info!("DICOM DeID complete!");
     Ok(())
 }
@@ -94,6 +102,8 @@ fn deid_each_dcm_file(
     mask_config_list: &Vec<DataDictionaryEntryRef<'static>>,
     delete_config_list: &Vec<DataDictionaryEntryRef<'static>>,
     add_config_list: &HashMap<String, String>,
+    private_tags_del: &bool,
+    wg: WaitGroup,
 ) -> Result<(), Error> {
     let tag_to_match = dcm_obj.element(match_id.tag.inner())?.to_str()?.to_string();
     // let patient_id = dcm_obj.element_by_name("PatientID")?.to_str()?.to_string();
@@ -107,9 +117,18 @@ fn deid_each_dcm_file(
         return Ok(());
     }
 
+    let mut new_dicom_object = dcm_obj.clone();
+
+    for each_element in dcm_obj {
+        if each_element.header().vr() == VR::SQ {
+            let r_tag = each_element.header().tag;
+            new_dicom_object.remove_element(r_tag);
+        }
+    }
+
     let new_dicom_object = match mask_config_list.is_empty() {
-        true => dcm_obj.clone(),
-        false => tags_to_mask(dcm_obj.clone(), patient_deid, mask_config_list)?,
+        true => new_dicom_object.clone(),
+        false => tags_to_mask(new_dicom_object.clone(), patient_deid, mask_config_list)?,
     };
 
     let new_dicom_object = match add_config_list.is_empty() {
@@ -117,17 +136,28 @@ fn deid_each_dcm_file(
         false => tags_to_add(new_dicom_object.clone(), add_config_list)?,
     };
 
-    let new_dicom_object = match delete_config_list.is_empty() {
+    let mut new_dicom_object = match delete_config_list.is_empty() {
         true => new_dicom_object.clone(),
         false => tags_to_delete(new_dicom_object.clone(), delete_config_list)?,
     };
+
+    if private_tags_del.to_owned() {
+        new_dicom_object = delete_private_tags(new_dicom_object)?
+    }
 
     let dicom_tags_values = get_sanitized_tag_values(&new_dicom_object)?;
     let file_name = generate_dicom_file_name(&dicom_tags_values, "DeID".to_string())?;
     let dir_path = generate_dicom_file_path(dicom_tags_values, &destination_path)?;
     let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
     debug!("Saving file: {} to: {}", file_name, dir_path);
-    new_dicom_object.write_to_file(full_path)?;
+    // new_dicom_object.write_to_file(full_path)?;
+    let dcm_obj_clone = new_dicom_object.clone();
+    rayon::spawn(move || {
+        dcm_obj_clone
+            .write_to_file(full_path)
+            .expect("Failed to save file");
+        drop(wg);
+    });
     Ok(())
 }
 

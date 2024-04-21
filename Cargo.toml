@@ -21,6 +21,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.75"
 clap = { version = "4.4.9", features = ["derive"] }
+crossbeam = "0.8.4"
 dicom = "0.6.3"
 home = "0.5.9"
 indicatif = "0.17.7"

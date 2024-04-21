@@ -9,11 +9,14 @@ use std::{
 use anyhow::Result;
 use dicom::{
     core::{dictionary::DataDictionaryEntryRef, DataDictionary, DataElement, VR},
-    dictionary_std::tags,
+    dictionary_std::tags::{self},
     object::{FileDicomObject, InMemDicomObject, StandardDataDictionary, Tag},
 };
 use indicatif::{ProgressBar, ProgressStyle};
-use rayon::iter::{ParallelBridge, ParallelIterator};
+use rayon::{
+    current_num_threads,
+    iter::{ParallelBridge, ParallelIterator},
+};
 use regex::Regex;
 use tracing::{error, info, warn};
 use walkdir::{DirEntry, WalkDir};
@@ -44,6 +47,7 @@ static DICOM_TAGS_CHANGE: [(Tag, VR); 6] = [
 
 // Logo
 pub fn print_logo() {
+    let app_version = env!("CARGO_PKG_VERSION");
     let mut art = String::new();
 
     write!(
@@ -58,7 +62,7 @@ pub fn print_logo() {
     )
     .unwrap();
 
-    println!("{}", art);
+    println!("{} Ver: {}", art, app_version);
 }
 
 // Initial setup before starting the action
@@ -83,6 +87,7 @@ pub fn preprocessing_setup(
         )
         .unwrap(),
     );
+    info!("Current number of threads: {}", current_num_threads());
     Ok((all_files, total_len, pb))
 }
 
@@ -252,7 +257,20 @@ pub fn tags_to_delete(
     for each_tag in delete_config_list {
         match dcm_obj.remove_element(each_tag.tag.inner()) {
             true => (),
-            false => warn!("Delete Tag: {:?} not valid/found", each_tag.tag.inner()),
+            // false => warn!("Delete Tag: {:?} not valid/found", each_tag.tag.inner()),
+            false => (),
+        }
+    }
+    Ok(dcm_obj)
+}
+
+pub fn delete_private_tags(
+    mut dcm_obj: FileDicomObject<InMemDicomObject>,
+) -> Result<FileDicomObject<InMemDicomObject>> {
+    // Mask all SQ values with the given ID
+    for each_element in dcm_obj.clone() {
+        if each_element.header().vr() == VR::SQ {
+            dcm_obj.remove_element(each_element.header().tag);
         }
     }
     Ok(dcm_obj)

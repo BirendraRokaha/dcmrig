@@ -14,6 +14,7 @@ tags = ["PatientID", "PatientName"]
 # List of tags that will be deleted
 [delete]
 tags = []
+private_tags = true
 
 # Dictionary of tags to be added along with their values
 [add]
