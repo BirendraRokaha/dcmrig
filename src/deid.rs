@@ -111,48 +111,42 @@ fn deid_each_dcm_file(
         Some(deid) => deid.to_string(),
         None => "".to_string(),
     };
-
     if patient_deid.is_empty() {
         debug!("DeID for {tag_to_match} is not found");
         return Ok(());
     }
-
     let mut new_dicom_object = dcm_obj.clone();
-
     for each_element in dcm_obj {
         if each_element.header().vr() == VR::SQ {
             let r_tag = each_element.header().tag;
             new_dicom_object.remove_element(r_tag);
         }
     }
-
     let new_dicom_object = match mask_config_list.is_empty() {
         true => new_dicom_object.clone(),
         false => tags_to_mask(new_dicom_object.clone(), patient_deid, mask_config_list)?,
     };
-
     let new_dicom_object = match add_config_list.is_empty() {
         true => new_dicom_object.clone(),
         false => tags_to_add(new_dicom_object.clone(), add_config_list)?,
     };
-
     let mut new_dicom_object = match delete_config_list.is_empty() {
         true => new_dicom_object.clone(),
         false => tags_to_delete(new_dicom_object.clone(), delete_config_list)?,
     };
-
     if private_tags_del.to_owned() {
         new_dicom_object = delete_private_tags(new_dicom_object)?
     }
-
     let dicom_tags_values = get_sanitized_tag_values(&new_dicom_object)?;
-    let file_name = generate_dicom_file_name(&dicom_tags_values, "DeID".to_string())?;
-    let dir_path = generate_dicom_file_path(dicom_tags_values, &destination_path)?;
-    let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
-    debug!("Saving file: {} to: {}", file_name, dir_path);
-    // new_dicom_object.write_to_file(full_path)?;
+    let new_dp = destination_path.clone();
     let dcm_obj_clone = new_dicom_object.clone();
     rayon::spawn(move || {
+        let file_name = generate_dicom_file_name(&dicom_tags_values, "DeID".to_string())
+            .expect("Failed to generate file name");
+        let dir_path = generate_dicom_file_path(dicom_tags_values, &new_dp)
+            .expect("Failed to generate DIR path");
+        let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
+        debug!("Saving file: {} to: {}", file_name, dir_path);
         dcm_obj_clone
             .write_to_file(full_path)
             .expect("Failed to save file");

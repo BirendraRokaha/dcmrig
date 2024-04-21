@@ -354,22 +354,3 @@ pub fn extract_tag_vr_from_str(tag_name: &String) -> Result<(Tag, VR)> {
         }
     };
 }
-
-//
-// #[derive(Debug, Clone)]
-// pub struct DcmToStore {
-//     pub dcm_obj: FileDicomObject<InMemDicomObject>,
-//     pub dest_path: String,
-// }
-
-// impl DcmToStore {
-//     pub fn new(dcm_obj: FileDicomObject<InMemDicomObject>, dest_path: String) -> Self {
-//         DcmToStore { dcm_obj, dest_path }
-//     }
-
-//     pub fn push_for_store(&self) {
-//         self.dcm_obj
-//             .write_to_file(&self.dest_path)
-//             .unwrap_or_else(|_| error!("Failed to store dicom file: {}", &self.dest_path))
-//     }
-// }

@@ -33,7 +33,7 @@ The binary will be generated at `target/release/dcmrig`
 - [x] Read all DICOM files from a given source
 - [x] Parse the DICOM file and get the metadata by TagID or Tag name
 - [x] Create and save a new dicom file in the desired location
-- [ ] Handle private tags
+- [x] [Partially complete] Handle private tags
 
 ### Nice to have
 - [x] Pretty output
@@ -76,6 +76,7 @@ tags = ["PatientID", "PatientName"]
 # List of tags that will be deleted
 [delete]
 tags = []
+private_tags = false
 
 # Dictionary of tags to be added along with their values
 [add]
