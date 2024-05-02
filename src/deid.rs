@@ -1,10 +1,10 @@
 use crate::cookbook_parser::parse_toml_cookbook;
-use anyhow::{bail, Error, Result};
+use anyhow::{bail, Result};
 use crossbeam::sync::WaitGroup;
 use dcmrig_rs::*;
 
 use dicom::{
-    core::{dictionary::DataDictionaryEntryRef, VR},
+    core::dictionary::DataDictionaryEntryRef,
     object::{open_file, FileDicomObject, InMemDicomObject},
 };
 
@@ -43,9 +43,9 @@ pub fn dicom_deid(
         error!("Can't open the mapping table: {}", mapping_table.display());
         exit(1);
     });
-
-    // Main Loop
     let wg = WaitGroup::new();
+    // Main Loop
+
     all_files
         .par_iter()
         .enumerate()
@@ -104,42 +104,41 @@ fn deid_each_dcm_file(
     add_config_list: HashMap<String, String>,
     private_tags_del: bool,
     wg: WaitGroup,
-) -> Result<(), Error> {
+) -> Result<()> {
     let tag_to_match = dcm_obj.element(match_id.tag.inner())?.to_str()?.to_string();
     // let patient_id = dcm_obj.element_by_name("PatientID")?.to_str()?.to_string();
     let patient_deid = match mapping_dict.get(&tag_to_match) {
         Some(deid) => deid.to_string(),
         None => "".to_string(),
     };
+
     if patient_deid.is_empty() {
         debug!("DeID for {tag_to_match} is not found");
         return Ok(());
     }
     let mut new_dicom_object = dcm_obj.clone();
-    for each_element in dcm_obj {
-        if each_element.header().vr() == VR::SQ {
-            let r_tag = each_element.header().tag;
-            new_dicom_object.remove_element(r_tag);
-        }
+
+    if private_tags_del {
+        new_dicom_object = delete_private_tags(new_dicom_object)?
     }
+
     let new_dicom_object = match mask_config_list.is_empty() {
-        true => new_dicom_object.clone(),
+        true => new_dicom_object,
         false => tags_to_mask(new_dicom_object.clone(), patient_deid, mask_config_list)?,
     };
     let new_dicom_object = match add_config_list.is_empty() {
-        true => new_dicom_object.clone(),
+        true => new_dicom_object,
         false => tags_to_add(new_dicom_object.clone(), add_config_list)?,
     };
-    let mut new_dicom_object = match delete_config_list.is_empty() {
-        true => new_dicom_object.clone(),
+    let new_dicom_object = match delete_config_list.is_empty() {
+        true => new_dicom_object,
         false => tags_to_delete(new_dicom_object.clone(), delete_config_list)?,
     };
-    if private_tags_del.to_owned() {
-        new_dicom_object = delete_private_tags(new_dicom_object)?
-    }
+
     let dicom_tags_values = get_sanitized_tag_values(&new_dicom_object)?;
     let new_dp = destination_path.clone();
     let dcm_obj_clone = new_dicom_object.clone();
+
     rayon::spawn(move || {
         let file_name = generate_dicom_file_name(&dicom_tags_values, "DeID".to_string())
             .expect("Failed to generate file name");

@@ -9,7 +9,7 @@ use std::{
 use anyhow::Result;
 use dicom::{
     core::{dictionary::DataDictionaryEntryRef, DataDictionary, DataElement, VR},
-    dictionary_std::tags::{self},
+    dictionary_std::tags,
     object::{FileDicomObject, InMemDicomObject, StandardDataDictionary, Tag},
 };
 use indicatif::{ProgressBar, ProgressStyle};
@@ -224,7 +224,7 @@ pub fn tags_to_mask(
 ) -> Result<FileDicomObject<InMemDicomObject>> {
     for each_tag in mask_config_list {
         let each_tag_tag = each_tag.tag.inner();
-        let each_tag_vr = each_tag.vr;
+        let each_tag_vr: VR = each_tag.vr.relaxed();
         match dcm_obj.put(DataElement::new(
             each_tag_tag,
             each_tag_vr,
@@ -267,7 +267,6 @@ pub fn tags_to_delete(
 pub fn delete_private_tags(
     mut dcm_obj: FileDicomObject<InMemDicomObject>,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
-    // Mask all SQ values with the given ID
     for each_element in dcm_obj.clone() {
         if each_element.header().vr() == VR::SQ {
             dcm_obj.remove_element(each_element.header().tag);
@@ -324,6 +323,7 @@ pub fn generate_dicom_file_path(
             .unwrap(),
         dicom_tags_values.get("SeriesNumber").unwrap(),
         replace_non_alphanumeric(dicom_tags_values.get("SeriesDescription").unwrap().trim())
+            .to_uppercase()
     );
     create_target_dir(&dir_path)?;
     Ok(dir_path)
@@ -335,8 +335,6 @@ pub fn print_status(
     total_non_dcm_files: u64,
     action: String,
 ) -> Result<()> {
-    // let total_failed: u64 = *failed_case.lock().unwrap();
-    // let total_non_dcm: u64 = *non_dcm_cases.lock().unwrap();
     let total_processed = total_len - { total_proc_failed_files + total_non_dcm_files };
     info!("Total Files: {}", total_len);
     info!("Failed Cases: {}", total_proc_failed_files);
@@ -347,7 +345,7 @@ pub fn print_status(
 
 pub fn extract_tag_vr_from_str(tag_name: &String) -> Result<(Tag, VR)> {
     match DataDictionary::by_name(&StandardDataDictionary, &tag_name) {
-        Some(v) => return Ok((v.tag.inner(), v.vr)),
+        Some(v) => return Ok((v.tag.inner(), v.vr.relaxed())),
         None => {
             warn!("Tag: {} is not valid!", tag_name);
             return Err(anyhow::Error::msg("Tag Not Valid, VR not found!!"));
