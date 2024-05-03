@@ -40,6 +40,9 @@ pub struct SortCommand {
 
 #[derive(Debug, Args)]
 pub struct AnonCommand {
+    /// Prefix for the ANON ID, Default Blank
+    #[clap(short, long, default_value = "")]
+    pub prefix: String,
     /// Source data path, All files will be recursively indexed
     pub source: PathBuf,
     /// Destination data path, the paths will be recursively created

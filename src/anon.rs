@@ -13,13 +13,17 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tracing::{debug, error, info};
-use uuid::Uuid;
 
-pub fn dicom_anon(source_path: PathBuf, destination_path: PathBuf) -> Result<()> {
+pub fn dicom_anon(
+    source_path: PathBuf,
+    destination_path: PathBuf,
+    anon_prefix: String,
+) -> Result<()> {
     info!(
-        "Anonymizing the data for >> SOURCE: {} |DESTINATION: {}",
+        "Anonymizing the data for >> SOURCE: {} | DESTINATION: {} | ANON PREFIX: {}",
         source_path.display(),
-        destination_path.display()
+        destination_path.display(),
+        &anon_prefix
     );
 
     // Set up required variables
@@ -35,12 +39,18 @@ pub fn dicom_anon(source_path: PathBuf, destination_path: PathBuf) -> Result<()>
         .for_each(|(_index, working_path)| {
             if let Ok(dcm_obj) = open_file(working_path.path()) {
                 let map_clone = Arc::clone(&anon_id_tracker);
-                anon_each_dcm_file(&dcm_obj, &destination_path, map_clone, wg.clone())
-                    .unwrap_or_else(|_| {
-                        let mut map = failed_case.lock().unwrap();
-                        *map += 1;
-                        error!("Can't anon {:#?}", &working_path.file_name());
-                    });
+                anon_each_dcm_file(
+                    &dcm_obj,
+                    &destination_path,
+                    map_clone,
+                    &anon_prefix,
+                    wg.clone(),
+                )
+                .unwrap_or_else(|_| {
+                    let mut map = failed_case.lock().unwrap();
+                    *map += 1;
+                    error!("Can't anon {:#?}", &working_path.file_name());
+                });
             } else {
                 let mut map = non_dcm_cases.lock().unwrap();
                 *map += 1;
@@ -67,6 +77,7 @@ fn anon_each_dcm_file(
     dcm_obj: &FileDicomObject<InMemDicomObject>,
     destination_path: &PathBuf,
     map_clone: Arc<Mutex<HashMap<std::string::String, std::string::String>>>,
+    anon_prefix: &String,
     wg: WaitGroup,
 ) -> Result<()> {
     let patient_id = dcm_obj.element_by_name("PatientID")?.to_str()?.to_string();
@@ -74,7 +85,12 @@ fn anon_each_dcm_file(
     match map.get(&patient_id) {
         Some(_) => (),
         None => {
-            map.insert(patient_id.clone(), Uuid::new_v4().to_string());
+            let anon_id: String = if anon_prefix.len() == 0 {
+                gen_id()
+            } else {
+                format!("{anon_prefix}_{}", gen_id())
+            };
+            map.insert(patient_id.clone(), anon_id);
             debug!("New AnonID for: {}", patient_id);
         }
     }
@@ -101,41 +117,20 @@ fn anon_each_dcm_file(
 }
 
 fn dicom_anon_date_time(
-    mut dcm_obj: FileDicomObject<InMemDicomObject>,
+    dcm_obj: FileDicomObject<InMemDicomObject>,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
-    let dicom_date_tags = [
-        (tags::STUDY_DATE, VR::DA),
-        (tags::SERIES_DATE, VR::DA),
-        (tags::ACQUISITION_DATE, VR::DA),
-        (tags::PATIENT_BIRTH_DATE, VR::DA),
-        (tags::SCHEDULED_PROCEDURE_STEP_START_DATE, VR::DA),
-        (tags::SCHEDULED_PROCEDURE_STEP_END_DATE, VR::DA),
-        (tags::PERFORMED_PROCEDURE_STEP_START_DATE, VR::DA),
-        (tags::PERFORMED_PROCEDURE_STEP_END_DATE, VR::DA),
-        (tags::CONTENT_DATE, VR::DA),
-    ];
-    let dicom_time_tags = [
-        (tags::STUDY_TIME, VR::TM),
-        (tags::SERIES_TIME, VR::TM),
-        (tags::ACQUISITION_TIME, VR::TM),
-        (tags::SCHEDULED_PROCEDURE_STEP_START_TIME, VR::TM),
-        (tags::SCHEDULED_PROCEDURE_STEP_START_TIME, VR::TM),
-        (tags::PERFORMED_PROCEDURE_STEP_START_TIME, VR::TM),
-        (tags::PERFORMED_PROCEDURE_STEP_END_TIME, VR::TM),
-        (tags::CONTENT_TIME, VR::TM),
-    ];
+    let dicom_date_data = "19000101".to_string();
+    let dicom_time_data = "000000".to_string();
+    let dicom_date_time = format!("{dicom_date_data}{dicom_time_data}");
 
-    let dicom_date_data = "19000101";
-    let dicom_time_data = "000000";
+    let date_deleted_dcm_obj = mask_all_vr(dcm_obj.clone(), VR::DA, dicom_date_data)?;
+    let time_deleted_dcm_obj = mask_all_vr(date_deleted_dcm_obj.clone(), VR::TM, dicom_time_data)?;
 
-    for each_v in dicom_date_tags {
-        dcm_obj.put(DataElement::new(each_v.0, each_v.1, dicom_date_data));
-    }
-    for each_v in dicom_time_tags {
-        dcm_obj.put(DataElement::new(each_v.0, each_v.1, dicom_time_data));
-    }
-    dcm_obj.put(DataElement::new(tags::PATIENT_AGE, VR::AS, "099Y"));
-    dcm_obj.put(DataElement::new(tags::PATIENT_SEX, VR::CS, "O"));
+    let mut datetime_deleted_dcm_obj =
+        mask_all_vr(time_deleted_dcm_obj.clone(), VR::DT, dicom_date_time)?;
 
-    Ok(dcm_obj)
+    datetime_deleted_dcm_obj.put(DataElement::new(tags::PATIENT_AGE, VR::AS, "099Y"));
+    datetime_deleted_dcm_obj.put(DataElement::new(tags::PATIENT_SEX, VR::CS, "O"));
+
+    Ok(datetime_deleted_dcm_obj)
 }

@@ -45,9 +45,11 @@ fn app() -> Result<()> {
             deid_command.destination,
             deid_command.mapping_table,
         )?,
-        EntityType::Anon(anon_command) => {
-            dicom_anon(anon_command.source, anon_command.destination)?
-        }
+        EntityType::Anon(anon_command) => dicom_anon(
+            anon_command.source,
+            anon_command.destination,
+            anon_command.prefix,
+        )?,
         EntityType::Report(_report_command) => {
             warn!("Report function Not setup yet");
         }

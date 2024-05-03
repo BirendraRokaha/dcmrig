@@ -1,3 +1,4 @@
+use nanoid::nanoid;
 use std::{
     collections::HashMap,
     fmt::Write,
@@ -8,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use dicom::{
-    core::{dictionary::DataDictionaryEntryRef, DataDictionary, DataElement, VR},
+    core::{dictionary::DataDictionaryEntryRef, header::Header, DataDictionary, DataElement, VR},
     dictionary_std::tags,
     object::{FileDicomObject, InMemDicomObject, StandardDataDictionary, Tag},
 };
@@ -33,6 +34,11 @@ static DICOM_TAGS_SANITIZED: [&str; 10] = [
     "StudyInstanceUID",
     "InstanceNumber",
     "SeriesDescription",
+];
+
+static ALPHA_CHAR: [char; 22] = [
+    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'a', 'b', 'c', 'd', 'e', 'f', 'A', 'B', 'C',
+    'D', 'E', 'F',
 ];
 
 // Tags to change data for
@@ -275,6 +281,24 @@ pub fn delete_private_tags(
     Ok(dcm_obj)
 }
 
+pub fn mask_all_vr(
+    mut dcm_obj: FileDicomObject<InMemDicomObject>,
+    vr: VR,
+    val: String,
+) -> Result<FileDicomObject<InMemDicomObject>> {
+    for each_element in dcm_obj.clone() {
+        if each_element.header().vr() == vr {
+            // dcm_obj.remove_element(each_element.header().tag);
+            dcm_obj.put(DataElement::new(
+                each_element.tag(),
+                each_element.vr(),
+                val.clone(),
+            ));
+        }
+    }
+    Ok(dcm_obj)
+}
+
 // Generate the Dicom filename based on the dicom tags
 pub fn generate_dicom_file_name(
     dicom_tags_values: &HashMap<String, String>,
@@ -351,4 +375,9 @@ pub fn extract_tag_vr_from_str(tag_name: &String) -> Result<(Tag, VR)> {
             return Err(anyhow::Error::msg("Tag Not Valid, VR not found!!"));
         }
     };
+}
+
+// Generate ANON ID
+pub fn gen_id() -> String {
+    nanoid!(10, &ALPHA_CHAR)
 }
