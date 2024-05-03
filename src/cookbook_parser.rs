@@ -90,14 +90,15 @@ private_tags = false
 tags.PatientIdentityRemoved = "Yes"
 tags.DeidentificationMethod = "DCMRig"
 "#;
-    let mut file_to_save = File::create(cookbook_file_path).unwrap();
+    let mut file_to_save =
+        File::create(cookbook_file_path).expect("Failed to create cookbook path");
     write!(file_to_save, "{}", default_cookbook_raw.to_string())?;
     info!("Default cookbook created: {}", cookbook_file_path);
     Ok(default_cookbook_raw.to_string())
 }
 
 fn check_for_cookbook() -> Result<String> {
-    let home_path = home_dir().unwrap();
+    let home_path = home_dir().expect("Home path not found");
     let cookbook_home = format!("{}/.dcmrig", home_path.display());
     let cookbook_file_path = format!("{}/cookbook.toml", cookbook_home);
 
@@ -182,11 +183,14 @@ pub fn parse_toml_cookbook() -> Result<(
     // Validating the lists
     info!("Checking MatchID tag");
     let matchid = match matchid.tag.as_str() {
-        "PatientID" => DataDictionary::by_name(&StandardDataDictionary, "PatientID").unwrap(),
-        "PatientName" => DataDictionary::by_name(&StandardDataDictionary, "PatientName").unwrap(),
+        "PatientID" => DataDictionary::by_name(&StandardDataDictionary, "PatientID")
+            .expect("Failed to extract tag"),
+        "PatientName" => DataDictionary::by_name(&StandardDataDictionary, "PatientName")
+            .expect("Failed to extract tag"),
         &_ => {
             warn!("MatchID empty or corrupted. PatientID will be used as default");
-            DataDictionary::by_name(&StandardDataDictionary, "PatientID").unwrap()
+            DataDictionary::by_name(&StandardDataDictionary, "PatientID")
+                .expect("Failed to extract tag")
         }
     };
     info!("MatchID > {}", matchid.alias);

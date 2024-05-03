@@ -63,12 +63,12 @@ pub fn dicom_deid(
                     wg.clone(),
                 )
                 .unwrap_or_else(|_| {
-                    let mut map = failed_case.lock().unwrap();
+                    let mut map = failed_case.lock().expect("Failed to lock mutex");
                     *map += 1;
                     error!("Can't DeID {:#?}", &working_path.file_name());
                 });
             } else {
-                let mut map = non_dcm_cases.lock().unwrap();
+                let mut map = non_dcm_cases.lock().expect("Failed to lock mutex");
                 *map += 1;
                 copy_non_dicom_files(&working_path, &destination_path).unwrap_or_else(|_| {
                     error!("Can't copy non dicom file {:#?}", &working_path.file_name());
@@ -79,11 +79,10 @@ pub fn dicom_deid(
     pb.finish();
     print_status(
         total_len,
-        *failed_case.lock().unwrap(),
-        *non_dcm_cases.lock().unwrap(),
+        *failed_case.lock().expect("Failed to lock mutex"),
+        *non_dcm_cases.lock().expect("Failed to lock mutex"),
         "DeID".to_string(),
-    )
-    .unwrap();
+    )?;
     info!("Waiting for all threads to complete");
     wg.wait();
     info!("DICOM DeID complete!");

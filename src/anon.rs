@@ -47,12 +47,12 @@ pub fn dicom_anon(
                     wg.clone(),
                 )
                 .unwrap_or_else(|_| {
-                    let mut map = failed_case.lock().unwrap();
+                    let mut map = failed_case.lock().expect("Failed to lock mutex");
                     *map += 1;
                     error!("Can't anon {:#?}", &working_path.file_name());
                 });
             } else {
-                let mut map = non_dcm_cases.lock().unwrap();
+                let mut map = non_dcm_cases.lock().expect("Failed to lock mutex");
                 *map += 1;
                 copy_non_dicom_files(&working_path, &destination_path).unwrap_or_else(|_| {
                     error!("Can't copy non dicom file {:#?}", &working_path.file_name())
@@ -63,11 +63,10 @@ pub fn dicom_anon(
     pb.finish();
     print_status(
         total_len,
-        *failed_case.lock().unwrap(),
-        *non_dcm_cases.lock().unwrap(),
+        *failed_case.lock().expect("Failed to lock mutex"),
+        *non_dcm_cases.lock().expect("Failed to lock mutex"),
         "Anon".to_string(),
-    )
-    .unwrap();
+    )?;
     wg.wait();
     info!("DICOM Anon complete!");
     Ok(())
@@ -81,7 +80,7 @@ fn anon_each_dcm_file(
     wg: WaitGroup,
 ) -> Result<()> {
     let patient_id = dcm_obj.element_by_name("PatientID")?.to_str()?.to_string();
-    let mut map = map_clone.lock().unwrap();
+    let mut map = map_clone.lock().expect("Failed to lock mutex");
     match map.get(&patient_id) {
         Some(_) => (),
         None => {
@@ -94,7 +93,10 @@ fn anon_each_dcm_file(
             debug!("New AnonID for: {}", patient_id);
         }
     }
-    let patient_anon_id = map.get(&patient_id).unwrap().to_string();
+    let patient_anon_id = map
+        .get(&patient_id)
+        .expect("Failed to index Hashmap")
+        .to_string();
     let mut new_dicom_object = mask_tags_with_id(dcm_obj.clone(), patient_anon_id)?;
     new_dicom_object = dicom_anon_date_time(new_dicom_object)?;
     let dicom_tags_values: HashMap<String, String> = get_sanitized_tag_values(&new_dicom_object)?;

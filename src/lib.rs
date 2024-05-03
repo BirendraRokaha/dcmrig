@@ -61,7 +61,7 @@ pub fn print_logo() {
 ██████╔╝╚██████╗██║ ╚═╝ ██║    ██║  ██║██║╚██████╔╝
 "
     )
-    .unwrap();
+    .expect("Failed to write logo");
     println!("{} Ver: {}", art, app_version);
 }
 
@@ -84,8 +84,7 @@ pub fn preprocessing_setup(
     pb.set_style(
         ProgressStyle::with_template(
             "{spinner:.green} {percent}% [{elapsed_precise}] [{wide_bar:.cyan/blue}] ({pos}/{len}, ETA {eta})",
-        )
-        .unwrap(),
+        )?,
     );
     info!("Current number of threads: {}", current_num_threads());
     Ok((all_files, total_len, pb))
@@ -125,7 +124,10 @@ pub fn copy_non_dicom_files(each_file: &DirEntry, destination_path: &PathBuf) ->
     let non_dicom_file_path = PathBuf::from(format!(
         "{}/NON_DICOM/{}",
         &destination_path.to_string_lossy(),
-        &each_file.file_name().to_str().unwrap()
+        &each_file
+            .file_name()
+            .to_str()
+            .expect("Failed to extract filename")
     ));
     copy(each_file.clone().into_path(), non_dicom_file_path)?;
     Ok(())
@@ -133,7 +135,7 @@ pub fn copy_non_dicom_files(each_file: &DirEntry, destination_path: &PathBuf) ->
 
 // Replace all non_alphanumeric characters with an underscore '_'
 pub fn replace_non_alphanumeric(input: &str) -> String {
-    let re = Regex::new(r"[^a-zA-Z0-9]+").unwrap();
+    let re = Regex::new(r"[^a-zA-Z0-9]+").expect("Failed to set up Regex");
     let modified_chars: String = input
         .chars()
         .map(|c| if re.is_match(&c.to_string()) { '_' } else { c })
@@ -300,18 +302,31 @@ pub fn generate_dicom_file_name(
     let file_name = format!(
         "{}_{}_{}_{}T{}_{}_{}_{:0>5}.dcm",
         prefix,
-        dicom_tags_values.get("PatientID").unwrap().trim(),
-        dicom_tags_values.get("Modality").unwrap(),
-        dicom_tags_values.get("StudyDate").unwrap(),
+        dicom_tags_values
+            .get("PatientID")
+            .expect("Failed to extract value")
+            .trim(),
+        dicom_tags_values
+            .get("Modality")
+            .expect("Failed to extract value"),
+        dicom_tags_values
+            .get("StudyDate")
+            .expect("Failed to extract value"),
         dicom_tags_values
             .get("StudyTime")
-            .unwrap()
+            .expect("Failed to extract value")
             .split(".")
             .next()
-            .unwrap(),
-        dicom_tags_values.get("SeriesNumber").unwrap(),
-        dicom_tags_values.get("SeriesInstanceUID").unwrap(),
-        dicom_tags_values.get("InstanceNumber").unwrap()
+            .expect("Failed to extract value"),
+        dicom_tags_values
+            .get("SeriesNumber")
+            .expect("Failed to extract value"),
+        dicom_tags_values
+            .get("SeriesInstanceUID")
+            .expect("Failed to extract value"),
+        dicom_tags_values
+            .get("InstanceNumber")
+            .expect("Failed to extract value")
     );
     Ok(file_name)
 }
@@ -324,23 +339,36 @@ pub fn generate_dicom_file_path(
     let dir_path = format!(
         "{}/{}/{}T{}_{}/{:0>4}_{}",
         destination_path.display(),
-        dicom_tags_values.get("PatientID").unwrap().trim(),
-        dicom_tags_values.get("StudyDate").unwrap().trim(),
+        dicom_tags_values
+            .get("PatientID")
+            .expect("Failed to extract value")
+            .trim(),
+        dicom_tags_values
+            .get("StudyDate")
+            .expect("Failed to extract value")
+            .trim(),
         dicom_tags_values
             .get("StudyTime")
-            .unwrap()
+            .expect("Failed to extract value")
             .split(".")
             .next()
-            .unwrap(),
+            .expect("Failed to extract value"),
         dicom_tags_values
             .get("StudyInstanceUID")
-            .unwrap()
+            .expect("Failed to extract value")
             .split(".")
             .last()
-            .unwrap(),
-        dicom_tags_values.get("SeriesNumber").unwrap(),
-        replace_non_alphanumeric(dicom_tags_values.get("SeriesDescription").unwrap().trim())
-            .to_uppercase()
+            .expect("Failed to extract value"),
+        dicom_tags_values
+            .get("SeriesNumber")
+            .expect("Failed to extract value"),
+        replace_non_alphanumeric(
+            dicom_tags_values
+                .get("SeriesDescription")
+                .expect("Failed to extract value")
+                .trim()
+        )
+        .to_uppercase()
     );
     create_target_dir(&dir_path)?;
     Ok(dir_path)

@@ -23,7 +23,7 @@ pub fn dicom_sort(
 
     // Set up required variables
     let (all_files, total_len, pb) = preprocessing_setup(&source_path, &destination_path)?;
-    let sort_order_vec = generate_sort_order(sort_order).unwrap();
+    let sort_order_vec = generate_sort_order(sort_order)?;
     let failed_case: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
     let non_dcm_cases: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
     info!("Sort Order {:?}", sort_order_vec);
@@ -37,12 +37,12 @@ pub fn dicom_sort(
             if let Ok(dcm_obj) = open_file(working_path.path()) {
                 sort_each_dcm_file(&dcm_obj, &destination_path, &sort_order_vec, wg.clone())
                     .unwrap_or_else(|_| {
-                        let mut map = failed_case.lock().unwrap();
+                        let mut map = failed_case.lock().expect("Failed to lock mutex");
                         *map += 1;
                         error!("Cannot sort {:#?}", &working_path.file_name())
                     });
             } else {
-                let mut map = non_dcm_cases.lock().unwrap();
+                let mut map = non_dcm_cases.lock().expect("Failed to lock mutex");
                 *map += 1;
                 copy_non_dicom_files(&working_path, &destination_path).unwrap_or_else(|_| {
                     error!("Can't copy non dicom file {:#?}", &working_path.file_name())
@@ -53,11 +53,10 @@ pub fn dicom_sort(
     pb.finish();
     print_status(
         total_len,
-        *failed_case.lock().unwrap(),
-        *non_dcm_cases.lock().unwrap(),
+        *failed_case.lock().expect("Failed to lock mutex"),
+        *non_dcm_cases.lock().expect("Failed to lock mutex"),
         "Sorted".to_string(),
-    )
-    .unwrap();
+    )?;
     wg.wait();
     info!("DICOM Sort complete!");
     Ok(())
@@ -74,27 +73,42 @@ fn sort_each_dcm_file(
     let order_level = generate_order_level(sort_order_vec, &dicom_tags_values);
     let file_name = generate_dicom_file_name(
         &dicom_tags_values,
-        replace_non_alphanumeric(dicom_tags_values.get("PatientName").unwrap().trim()),
+        replace_non_alphanumeric(
+            dicom_tags_values
+                .get("PatientName")
+                .expect("Failed to extract value")
+                .trim(),
+        ),
     )?;
     let dir_path = format!(
         "{}/{}{}T{}_{}/{:0>4}_{}",
         destination_path.display(),
         order_level?,
-        dicom_tags_values.get("StudyDate").unwrap().trim(),
+        dicom_tags_values
+            .get("StudyDate")
+            .expect("Failed to extract value")
+            .trim(),
         dicom_tags_values
             .get("StudyTime")
-            .unwrap()
+            .expect("Failed to extract value")
             .split(".")
             .next()
-            .unwrap(),
+            .expect("Failed to extract value"),
         dicom_tags_values
             .get("StudyInstanceUID")
-            .unwrap()
+            .expect("Failed to extract value")
             .split(".")
             .last()
-            .unwrap(),
-        dicom_tags_values.get("SeriesNumber").unwrap(),
-        replace_non_alphanumeric(dicom_tags_values.get("SeriesDescription").unwrap().trim())
+            .expect("Failed to extract value"),
+        dicom_tags_values
+            .get("SeriesNumber")
+            .expect("Failed to extract value"),
+        replace_non_alphanumeric(
+            dicom_tags_values
+                .get("SeriesDescription")
+                .expect("Failed to extract value")
+                .trim()
+        )
     );
 
     let dcm_obj_clone = dcm_obj.clone();
@@ -138,7 +152,12 @@ fn generate_order_level(
         order_level = format!(
             "{}{}/",
             order_level,
-            replace_non_alphanumeric(dicom_tags_values.get(each.as_str()).unwrap().trim())
+            replace_non_alphanumeric(
+                dicom_tags_values
+                    .get(each.as_str())
+                    .expect("Failed to replace")
+                    .trim()
+            )
         )
     }
     Ok(order_level)

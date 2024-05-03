@@ -18,5 +18,5 @@ private_tags = false
 
 # Dictionary of tags to be added along with their values
 [add]
-tags.PatientIdentityRemoved = "Yes"
+tags.PatientIdentityRemoved = "YES"
 tags.DeidentificationMethod = "DCMRig"
