@@ -3,7 +3,7 @@
 # Mask and delete only work with the tags already present in the dicom file
 
 # Tags are case sensitive. Need to follow the DICOM Stadndard dictionary
-# Unique ID to match on, PatientID and PatientName tags suggested. It will default to PatientID
+# Unique ID to match on, PatientID or PatientName tags suggested. It will defaulted to PatientID
 [matchid]
 tag = "PatientID"
 

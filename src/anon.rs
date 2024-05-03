@@ -97,9 +97,7 @@ fn anon_each_dcm_file(
     let patient_anon_id = map.get(&patient_id).unwrap().to_string();
     let mut new_dicom_object = mask_tags_with_id(dcm_obj.clone(), patient_anon_id)?;
     new_dicom_object = dicom_anon_date_time(new_dicom_object)?;
-
     let dicom_tags_values: HashMap<String, String> = get_sanitized_tag_values(&new_dicom_object)?;
-
     let new_dp = destination_path.clone();
     let dcm_obj_clone = new_dicom_object.clone();
     rayon::spawn(move || {
@@ -122,15 +120,11 @@ fn dicom_anon_date_time(
     let dicom_date_data = "19000101".to_string();
     let dicom_time_data = "000000".to_string();
     let dicom_date_time = format!("{dicom_date_data}{dicom_time_data}");
-
     let date_deleted_dcm_obj = mask_all_vr(dcm_obj.clone(), VR::DA, dicom_date_data)?;
     let time_deleted_dcm_obj = mask_all_vr(date_deleted_dcm_obj.clone(), VR::TM, dicom_time_data)?;
-
     let mut datetime_deleted_dcm_obj =
         mask_all_vr(time_deleted_dcm_obj.clone(), VR::DT, dicom_date_time)?;
-
     datetime_deleted_dcm_obj.put(DataElement::new(tags::PATIENT_AGE, VR::AS, "099Y"));
     datetime_deleted_dcm_obj.put(DataElement::new(tags::PATIENT_SEX, VR::CS, "O"));
-
     Ok(datetime_deleted_dcm_obj)
 }

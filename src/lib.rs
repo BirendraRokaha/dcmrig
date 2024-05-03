@@ -36,11 +36,6 @@ static DICOM_TAGS_SANITIZED: [&str; 10] = [
     "SeriesDescription",
 ];
 
-static ALPHA_CHAR: [char; 22] = [
-    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'a', 'b', 'c', 'd', 'e', 'f', 'A', 'B', 'C',
-    'D', 'E', 'F',
-];
-
 // Tags to change data for
 static DICOM_TAGS_CHANGE: [(Tag, VR); 6] = [
     (tags::PATIENT_ID, VR::LO),
@@ -67,7 +62,6 @@ pub fn print_logo() {
 "
     )
     .unwrap();
-
     println!("{} Ver: {}", art, app_version);
 }
 
@@ -89,7 +83,7 @@ pub fn preprocessing_setup(
     let pb = ProgressBar::new(total_len);
     pb.set_style(
         ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] ({pos}/{len}, ETA {eta})",
+            "{spinner:.green} {percent}% [{elapsed_precise}] [{wide_bar:.cyan/blue}] ({pos}/{len}, ETA {eta})",
         )
         .unwrap(),
     );
@@ -155,7 +149,6 @@ pub fn get_sanitized_tag_values(
     let mut dicom_tags_values = HashMap::new();
     for each_tag in DICOM_TAGS_SANITIZED {
         let tag_value = dcm_obj.element_by_name(each_tag);
-        // println!("{:#?}", tag_value);
         match tag_value {
             Ok(_) => {
                 // let f_tag_value: &str = tag_value?.to_str()?.as_ref();
@@ -379,5 +372,6 @@ pub fn extract_tag_vr_from_str(tag_name: &String) -> Result<(Tag, VR)> {
 
 // Generate ANON ID
 pub fn gen_id() -> String {
-    nanoid!(10, &ALPHA_CHAR)
+    let alpha_numeric = &nanoid::alphabet::SAFE[2..];
+    nanoid!(10, &alpha_numeric)
 }
