@@ -86,8 +86,8 @@ tags.DeidentificationMethod = "DCMRig"
 Example: `dcmrig deid -m ./path_to_table ./source_path ./dest_path`
 
 2. Anonymisation
-- [x] Track unique PatientID and assign a UUID per unique ID\
-Example: `dcmrig anon ./source_path ./dest_path`
+- [x] Track unique PatientID and assign a anonID for every unique ID\
+Example: `dcmrig anon -p [ANON_ID PREFIX optional] ./source_path ./dest_path`
 
 3. Sort
 - [x] Create Paths from the given list

@@ -5,11 +5,12 @@ use dicom::object::{open_file, FileDicomObject, InMemDicomObject};
 use rayon::prelude::*;
 use std::{
     collections::HashMap,
+    fs,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
 use tracing::{debug, error, info, warn};
-
+use walkdir::DirEntry;
 pub fn dicom_sort(
     source_path: PathBuf,
     destination_path: PathBuf,
@@ -35,12 +36,18 @@ pub fn dicom_sort(
         .enumerate()
         .for_each(|(_index, working_path)| {
             if let Ok(dcm_obj) = open_file(working_path.path()) {
-                sort_each_dcm_file(&dcm_obj, &destination_path, &sort_order_vec, wg.clone())
-                    .unwrap_or_else(|_| {
-                        let mut map = failed_case.lock().expect("Failed to lock mutex");
-                        *map += 1;
-                        error!("Cannot sort {:#?}", &working_path.file_name())
-                    });
+                sort_each_dcm_file(
+                    working_path,
+                    &dcm_obj,
+                    &destination_path,
+                    &sort_order_vec,
+                    wg.clone(),
+                )
+                .unwrap_or_else(|_| {
+                    let mut map = failed_case.lock().expect("Failed to lock mutex");
+                    *map += 1;
+                    error!("Cannot sort {:#?}", &working_path.file_name())
+                });
             } else {
                 let mut map = non_dcm_cases.lock().expect("Failed to lock mutex");
                 *map += 1;
@@ -64,6 +71,7 @@ pub fn dicom_sort(
 
 // DICOM SORT
 fn sort_each_dcm_file(
+    source_path: &DirEntry,
     dcm_obj: &FileDicomObject<InMemDicomObject>,
     destination_path: &PathBuf,
     sort_order_vec: &Vec<String>,
@@ -111,14 +119,13 @@ fn sort_each_dcm_file(
         )
     );
 
-    let dcm_obj_clone = dcm_obj.clone();
+    let c_source_path = source_path.clone();
     rayon::spawn(move || {
         create_target_dir(&dir_path).expect("Failed to created target dir");
         let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
         debug!("Saving file: {} to: {}", file_name, dir_path);
-        dcm_obj_clone
-            .write_to_file(full_path)
-            .expect("Failed to save file");
+        fs::copy(c_source_path.into_path(), full_path)
+            .expect("Failed to copy file to sorted destination");
         drop(wg);
     });
     Ok(())
