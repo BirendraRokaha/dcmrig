@@ -16,9 +16,10 @@ use clap::Parser;
 use dcmrig_rs::print_logo;
 use deid::dicom_deid;
 use sort::dicom_sort;
-use tracing::{error, warn, Level};
+use tracing::{error, info, warn, Level};
 
 fn app() -> Result<()> {
+    let start_time = std::time::Instant::now();
     let args = ArgsParser::parse();
 
     tracing::subscriber::set_global_default(
@@ -31,7 +32,6 @@ fn app() -> Result<()> {
             })
             .finish(),
     )?;
-
     print_logo();
     // Only executes if one of the 4 subcommands are provided
     match args.action_type {
@@ -54,6 +54,13 @@ fn app() -> Result<()> {
             warn!("Report function Not setup yet");
         }
     }
+
+    let elapsed_time = std::time::Instant::now() - start_time;
+    info!(
+        "Total time: {}.{:03} seconds",
+        elapsed_time.as_secs(),
+        elapsed_time.subsec_millis()
+    );
     Ok(())
 }
 
