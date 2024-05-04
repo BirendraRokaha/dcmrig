@@ -84,7 +84,6 @@ fn sort_each_dcm_file(
 ) -> Result<()> {
     let dicom_tags_values = get_sanitized_tag_values(&dcm_obj)?;
     let order_level = generate_order_level(sort_order_vec, &dicom_tags_values, &dcm_obj)?;
-    println!("{}", order_level);
     let file_name = generate_dicom_file_name(
         &dicom_tags_values,
         replace_non_alphanumeric(
