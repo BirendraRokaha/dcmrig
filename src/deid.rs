@@ -65,7 +65,12 @@ pub fn dicom_deid(
                 .unwrap_or_else(|_| {
                     let mut map = failed_case.lock().expect("Failed to lock mutex");
                     *map += 1;
-                    error!("Can't DeID {:#?}", &working_path.file_name());
+                    error!(
+                        "Can't DeID {:#?} Copying to FAILED_CASES directory",
+                        &working_path.file_name()
+                    );
+                    failed_case_copy(&working_path.clone().into_path(), &destination_path)
+                        .expect("Failed to copy file to FAILED_CASES directory");
                 });
             } else {
                 let mut map = non_dcm_cases.lock().expect("Failed to lock mutex");

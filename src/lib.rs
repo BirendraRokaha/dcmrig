@@ -2,7 +2,7 @@ use nanoid::nanoid;
 use std::{
     collections::HashMap,
     fmt::Write,
-    fs::{canonicalize, copy, create_dir_all},
+    fs::{self, canonicalize, copy, create_dir_all},
     path::PathBuf,
     process::exit,
 };
@@ -133,6 +133,27 @@ pub fn copy_non_dicom_files(each_file: &DirEntry, destination_path: &PathBuf) ->
     Ok(())
 }
 
+pub fn failed_case_copy(source_path: &PathBuf, dest_path: &PathBuf) -> Result<()> {
+    let failed_cases_path = format!("{}/FAILED_CASES", dest_path.display());
+    match canonicalize(failed_cases_path.clone()) {
+        Ok(_) => (),
+        Err(_) => create_dir_all(&failed_cases_path).unwrap_or_else(|_| {
+            error!("Can't create dir: {}", failed_cases_path);
+            exit(1)
+        }),
+    }
+    let failed_cases_full_name = format!(
+        "{}/{}",
+        failed_cases_path,
+        source_path
+            .file_name()
+            .expect("Failed to extract file name")
+            .to_str()
+            .expect("Failed to convert filename to str")
+    );
+    fs::copy(source_path, failed_cases_full_name)?;
+    Ok(())
+}
 // Replace all non_alphanumeric characters with an underscore '_'
 pub fn replace_non_alphanumeric(input: &str) -> String {
     let re = Regex::new(r"[^a-zA-Z0-9]+").expect("Failed to set up Regex");

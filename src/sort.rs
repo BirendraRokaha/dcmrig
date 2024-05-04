@@ -46,7 +46,12 @@ pub fn dicom_sort(
                 .unwrap_or_else(|_| {
                     let mut map = failed_case.lock().expect("Failed to lock mutex");
                     *map += 1;
-                    error!("Cannot sort {:#?}", &working_path.file_name())
+                    error!(
+                        "Can't SORT {:#?} Copying to FAILED_CASES directory",
+                        &working_path.file_name()
+                    );
+                    failed_case_copy(&working_path.clone().into_path(), &destination_path)
+                        .expect("Failed to copy file to FAILED_CASES directory");
                 });
             } else {
                 let mut map = non_dcm_cases.lock().expect("Failed to lock mutex");
@@ -78,7 +83,8 @@ fn sort_each_dcm_file(
     wg: WaitGroup,
 ) -> Result<()> {
     let dicom_tags_values = get_sanitized_tag_values(&dcm_obj)?;
-    let order_level = generate_order_level(sort_order_vec, &dicom_tags_values);
+    let order_level = generate_order_level(sort_order_vec, &dicom_tags_values, &dcm_obj)?;
+    println!("{}", order_level);
     let file_name = generate_dicom_file_name(
         &dicom_tags_values,
         replace_non_alphanumeric(
@@ -91,7 +97,7 @@ fn sort_each_dcm_file(
     let dir_path = format!(
         "{}/{}{}T{}_{}/{:0>4}_{}",
         destination_path.display(),
-        order_level?,
+        order_level,
         dicom_tags_values
             .get("StudyDate")
             .expect("Failed to extract value")
@@ -153,9 +159,12 @@ fn generate_sort_order(ord_input: String) -> Result<Vec<String>> {
 fn generate_order_level(
     order_level_vec: &Vec<String>,
     dicom_tags_values: &HashMap<String, String>,
+    dcm_obj: &FileDicomObject<InMemDicomObject>,
 ) -> Result<String> {
     let mut order_level: String = "".to_string();
+
     for each in order_level_vec {
+        dcm_obj.element_by_name(&each)?;
         order_level = format!(
             "{}{}/",
             order_level,
