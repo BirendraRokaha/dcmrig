@@ -4,7 +4,7 @@ use crossbeam::sync::WaitGroup;
 use dcmrig_rs::*;
 
 use dicom::{
-    core::dictionary::DataDictionaryEntryRef,
+    core::{dictionary::DataDictionaryEntryRef, VR},
     object::{open_file, FileDicomObject, InMemDicomObject},
 };
 
@@ -32,8 +32,14 @@ pub fn dicom_deid(
     );
 
     // Get cookbook configs
-    let (match_id, mask_config, add_config, delete_config, private_tags_del) =
-        parse_toml_cookbook()?;
+    let (
+        match_id,
+        mask_tag_config,
+        mask_vr_config,
+        add_config,
+        delete_tag_config,
+        private_tags_del,
+    ) = parse_toml_cookbook()?;
 
     // Set up required variables
     let (all_files, total_len, pb) = preprocessing_setup(&source_path, &destination_path)?;
@@ -44,8 +50,8 @@ pub fn dicom_deid(
         exit(1);
     });
     let wg = WaitGroup::new();
-    // Main Loop
 
+    // Main Loop
     all_files
         .par_iter()
         .enumerate()
@@ -56,8 +62,9 @@ pub fn dicom_deid(
                     &destination_path,
                     mapping_dict.clone(),
                     match_id.clone(),
-                    mask_config.clone(),
-                    delete_config.clone(),
+                    mask_tag_config.clone(),
+                    mask_vr_config.clone(),
+                    delete_tag_config.clone(),
                     add_config.clone(),
                     private_tags_del.clone(),
                     wg.clone(),
@@ -103,8 +110,9 @@ fn deid_each_dcm_file(
     destination_path: &PathBuf,
     mapping_dict: HashMap<String, String>,
     match_id: DataDictionaryEntryRef<'static>,
-    mask_config_list: Vec<DataDictionaryEntryRef<'static>>,
-    delete_config_list: Vec<DataDictionaryEntryRef<'static>>,
+    mask_tag_config_list: Vec<DataDictionaryEntryRef<'static>>,
+    mask_vr_config_list: Vec<VR>,
+    delete_tag_config_list: Vec<DataDictionaryEntryRef<'static>>,
     add_config_list: HashMap<String, String>,
     private_tags_del: bool,
     wg: WaitGroup,
@@ -126,17 +134,28 @@ fn deid_each_dcm_file(
         new_dicom_object = delete_private_tags(new_dicom_object)?
     }
 
-    let new_dicom_object = match mask_config_list.is_empty() {
+    let new_dicom_object = match mask_tag_config_list.is_empty() {
         true => new_dicom_object,
-        false => tags_to_mask(new_dicom_object.clone(), patient_deid, mask_config_list)?,
+        false => tags_to_mask(
+            new_dicom_object.clone(),
+            patient_deid.clone(),
+            mask_tag_config_list,
+        )?,
     };
+
+    let new_dicom_object = match mask_vr_config_list.is_empty() {
+        true => new_dicom_object,
+        false => mask_vr(new_dicom_object, mask_vr_config_list, patient_deid.clone())?,
+    };
+
     let new_dicom_object = match add_config_list.is_empty() {
         true => new_dicom_object,
         false => tags_to_add(new_dicom_object.clone(), add_config_list)?,
     };
-    let new_dicom_object = match delete_config_list.is_empty() {
+
+    let new_dicom_object = match delete_tag_config_list.is_empty() {
         true => new_dicom_object,
-        false => tags_to_delete(new_dicom_object.clone(), delete_config_list)?,
+        false => tags_to_delete(new_dicom_object.clone(), delete_tag_config_list)?,
     };
 
     let dicom_tags_values = get_sanitized_tag_values(&new_dicom_object)?;

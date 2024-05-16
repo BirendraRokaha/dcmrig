@@ -1,6 +1,6 @@
 [package]
 name = "dcmrig"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Birendra Rokaha <birenrokaha1@gmail.com>"]
 description = "DICOM corelab tools"
@@ -24,7 +24,7 @@ clap = { version = "4.5.4", features = ["derive"] }
 crossbeam = "0.8.4"
 dicom = "0.7.0"
 home = "0.5.9"
-indicatif = "0.17.8"
+indicatif = { version = "0.17.8", features = ["rayon"] }
 nanoid = "0.4.0"
 rayon = "1.10.0"
 regex = "1.10.2"

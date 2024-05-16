@@ -1,15 +1,24 @@
-# The chain of application is mask > add > delete
+#The chain of application is mask > add > delete
 # The tags are case sensitive. They should match the DICOM standard dictionary specification
 # Mask and delete only work with the tags already present in the dicom file
 
 # Tags are case sensitive. Need to follow the DICOM Stadndard dictionary
-# Unique ID to match on, PatientID or PatientName tags suggested. It will defaulted to PatientID
+# Unique ID to match on, PatientID and PatientName tags suggested. It will default to PatientID
 [matchid]
 tag = "PatientID"
 
-# List of tags that will be masked by the DeID
+# List of tags and VRs that will be masked by the DeID
+# Only PN VR recommended to MASK
 [mask]
-tags = ["PatientID", "PatientName"]
+tags = [
+    "PatientID",
+    "PatientName",
+    "InstitutionName",
+    "InstitutionAddress",
+    "StudyID",
+    "AccessionNumber",
+]
+vrs = ["PN"]
 
 # List of tags that will be deleted
 [delete]
@@ -17,6 +26,9 @@ tags = []
 private_tags = false
 
 # Dictionary of tags to be added along with their values
+# Date should follow YYYYMMDD format >> 19900101
+# Time should follow HHMMSS format >> 090000
+# DateTime should floolw YYYYMMDDTHHMMSS format 19900101T090000
 [add]
-tags.PatientIdentityRemoved = "YES"
+tags.PatientIdentityRemoved = "Yes"
 tags.DeidentificationMethod = "DCMRig"

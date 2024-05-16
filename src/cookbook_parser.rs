@@ -1,10 +1,11 @@
 use anyhow::Result;
 use dicom::core::dictionary::DataDictionaryEntryRef;
-use dicom::core::DataDictionary;
+use dicom::core::{DataDictionary, VR};
 use dicom::object::StandardDataDictionary;
 use home::{self, home_dir};
 use serde::Deserialize;
 use std::io::Write;
+use std::str::FromStr;
 use std::{
     collections::HashMap,
     fs::{self, canonicalize, create_dir_all, File},
@@ -29,11 +30,15 @@ struct MatchIDTag {
 #[derive(Debug, Deserialize, Clone)]
 struct MaskTags {
     tags: Vec<String>,
+    vrs: Vec<String>,
 }
 
 impl MaskTags {
     fn default() -> Self {
-        MaskTags { tags: Vec::new() }
+        MaskTags {
+            tags: Vec::new(),
+            vrs: Vec::new(),
+        }
     }
 }
 
@@ -76,16 +81,21 @@ fn create_default_cookbook(cookbook_file_path: &String) -> Result<String> {
 [matchid]
 tag = "PatientID"
 
-# List of tags that will be masked by the DeID
+# List of tags and VRs that will be masked by the DeID
+# Only PN VR recommended
 [mask]
-tags = ["PatientID", "PatientName"]
+tags = ["PatientID", "PatientName", "InstitutionName", "InstitutionAddress", "StudyID", "AccessionNumber"]
+vrs = ["PN"]
 
 # List of tags that will be deleted
 [delete]
-tags = ["InstitutionalDepartmentName"]
+tags = []
 private_tags = false
 
 # Dictionary of tags to be added along with their values
+# Date should follow YYYYMMDD format >> 19900101
+# Time should follow HHMMSS format >> 090000
+# DateTime should floolw YYYYMMDDTHHMMSS format 19900101T090000
 [add]
 tags.PatientIdentityRemoved = "Yes"
 tags.DeidentificationMethod = "DCMRig"
@@ -105,7 +115,7 @@ fn check_for_cookbook() -> Result<String> {
     match canonicalize(&cookbook_file_path) {
         Ok(_) => (),
         Err(_) => create_dir_all(&cookbook_home).unwrap_or_else(|_| {
-            error!("Can't create dir: {}", &cookbook_home);
+            error!("Can't create cookbook root dir: {}", &cookbook_home);
             exit(1)
         }),
     }
@@ -136,6 +146,18 @@ fn check_valid_tag_vec(tag_vec: Vec<String>) -> Vec<DataDictionaryEntryRef<'stat
     std_tag_list
 }
 
+fn check_valid_vr_vec(vrs_vec: Vec<String>) -> Vec<VR> {
+    let mut std_vr_list = Vec::new();
+    for each in vrs_vec {
+        match VR::from_str(&each) {
+            Ok(vr) => std_vr_list.push(vr.to_owned()),
+            Err(_) => warn!("VR {} is not valid", each),
+        }
+    }
+    // tags_vec
+    std_vr_list
+}
+
 fn check_valid_tag_hashmap(tag_hash: HashMap<String, String>) -> HashMap<String, String> {
     let mut tags_hash_m = tag_hash.clone();
     for each in tag_hash {
@@ -150,9 +172,48 @@ fn check_valid_tag_hashmap(tag_hash: HashMap<String, String>) -> HashMap<String,
     tags_hash_m
 }
 
+fn check_tag_list(tag_list: Vec<String>) -> Vec<DataDictionaryEntryRef<'static>> {
+    match tag_list.is_empty() {
+        true => {
+            warn!("The Mask cookbook is empty or corrupted");
+            return vec![];
+        }
+        false => {
+            info!("Checking Mask list");
+            let tag_list: Vec<DataDictionaryEntryRef<'_>> = check_valid_tag_vec(tag_list);
+            // info!("Tags to mask {:?}", mask_list);
+            tag_list
+                .iter()
+                .enumerate()
+                .for_each(|(_i, v)| info!("Tags to mask {}", v.alias));
+            return tag_list;
+        }
+    }
+}
+
+fn check_vr_list(vr_list: Vec<String>) -> Vec<VR> {
+    match vr_list.is_empty() {
+        true => {
+            warn!("The Mask cookbook is empty or corrupted");
+            return vec![];
+        }
+        false => {
+            info!("Checking Mask list");
+            let vr_list = check_valid_vr_vec(vr_list);
+            // info!("Tags to mask {:?}", mask_list);
+            vr_list
+                .iter()
+                .enumerate()
+                .for_each(|(_i, v)| info!("VR to mask {}", v));
+            return vr_list;
+        }
+    }
+}
+
 pub fn parse_toml_cookbook() -> Result<(
     DataDictionaryEntryRef<'static>,
     Vec<DataDictionaryEntryRef<'static>>,
+    Vec<VR>,
     HashMap<String, String>,
     Vec<DataDictionaryEntryRef<'static>>,
     bool,
@@ -165,7 +226,17 @@ pub fn parse_toml_cookbook() -> Result<(
     let matchid = toml_des.matchid.unwrap_or_else(|| MatchIDTag {
         tag: "PatientID".to_string(),
     });
-    let mask_list = toml_des.mask.unwrap_or_else(|| MaskTags::default()).tags;
+    let mask_list = toml_des
+        .mask
+        .clone()
+        .unwrap_or_else(|| MaskTags::default())
+        .tags;
+    let mask_vrs_list = toml_des
+        .mask
+        .clone()
+        .unwrap_or_else(|| MaskTags::default())
+        .vrs;
+
     let add_list = toml_des.add.unwrap_or_else(|| AddTags::default()).tags;
 
     let delete_list = toml_des
@@ -177,8 +248,6 @@ pub fn parse_toml_cookbook() -> Result<(
         .delete
         .unwrap_or_else(|| DelTags::default())
         .private_tags;
-    // let delete_list: Vec<String> = vec![];
-    // let private_tags_del = true;
 
     // Validating the lists
     info!("Checking MatchID tag");
@@ -195,38 +264,10 @@ pub fn parse_toml_cookbook() -> Result<(
     };
     info!("MatchID > {}", matchid.alias);
 
-    let mask_list = match mask_list.is_empty() {
-        true => {
-            warn!("The Mask cookbook is empty or corrupted");
-            vec![]
-        }
-        false => {
-            info!("Checking Mask list");
-            let mask_list = check_valid_tag_vec(mask_list);
-            // info!("Tags to mask {:?}", mask_list);
-            mask_list
-                .iter()
-                .enumerate()
-                .for_each(|(_i, v)| info!("Tags to mask {}", v.alias));
-            mask_list
-        }
-    };
+    let mask_tag_list = check_tag_list(mask_list);
+    let delete_tag_list = check_tag_list(delete_list);
 
-    let delete_list = match delete_list.is_empty() {
-        true => {
-            warn!("The Delete cookbook is empty or corrupted");
-            vec![]
-        }
-        false => {
-            info!("Checking Delete list");
-            let delete_list = check_valid_tag_vec(delete_list);
-            delete_list
-                .iter()
-                .enumerate()
-                .for_each(|(_i, v)| info!("Tags to delete {}", v.alias));
-            delete_list
-        }
-    };
+    let mask_vr_list = check_vr_list(mask_vrs_list);
 
     let add_list = match add_list.is_empty() {
         true => {
@@ -247,9 +288,10 @@ pub fn parse_toml_cookbook() -> Result<(
 
     Ok((
         matchid.to_owned(),
-        mask_list,
+        mask_tag_list,
+        mask_vr_list,
         add_list,
-        delete_list,
+        delete_tag_list,
         private_tags_del,
     ))
 }

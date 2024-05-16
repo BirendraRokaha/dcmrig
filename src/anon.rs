@@ -2,7 +2,12 @@ use anyhow::Result;
 use crossbeam::sync::WaitGroup;
 use dcmrig_rs::*;
 use dicom::{
-    core::{DataElement, VR},
+    core::{
+        chrono::NaiveDate,
+        value::{DicomDate, DicomDateTime, DicomTime},
+        DataElement, VR,
+    },
+    dicom_value,
     dictionary_std::tags,
     object::{open_file, FileDicomObject, InMemDicomObject},
 };
@@ -32,17 +37,18 @@ pub fn dicom_anon(
     let non_dcm_cases: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
     let anon_id_tracker: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
     let wg = WaitGroup::new();
+
     // Main Loop
     all_files
         .par_iter()
         .enumerate()
         .for_each(|(_index, working_path)| {
             if let Ok(dcm_obj) = open_file(working_path.path()) {
-                let map_clone = Arc::clone(&anon_id_tracker);
+                let anon_id_clone = Arc::clone(&anon_id_tracker);
                 anon_each_dcm_file(
                     &dcm_obj,
                     &destination_path,
-                    map_clone,
+                    anon_id_clone,
                     &anon_prefix,
                     wg.clone(),
                 )
@@ -124,14 +130,34 @@ fn anon_each_dcm_file(
 fn dicom_anon_date_time(
     dcm_obj: FileDicomObject<InMemDicomObject>,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
-    let dicom_date_data = "19000101".to_string();
-    let dicom_time_data = "000000".to_string();
-    let dicom_date_time = format!("{dicom_date_data}{dicom_time_data}");
+    // Setting Up primitives
+    let time_str = "090000".to_string();
+    let date_str = "19000101".to_string();
+    let d_date = DicomDate::try_from(&NaiveDate::parse_from_str(&date_str, "%Y%m%d")?)?;
+
+    let hr: u8 = time_str[0..2].to_string().parse()?;
+    let min: u8 = time_str[2..4].to_string().parse()?;
+    let sec: u8 = time_str[4..6].to_string().parse()?;
+    let d_time = DicomTime::from_hms(hr, min, sec)?;
+
+    let dicom_date_data = dicom_value!(Date, d_date);
+    let dicom_time_data = dicom_value!(Time, d_time);
+    let dicom_date_time =
+        dicom_value!(DateTime, DicomDateTime::from_date_and_time(d_date, d_time)?);
+
     let date_deleted_dcm_obj = mask_all_vr(dcm_obj.clone(), VR::DA, dicom_date_data)?;
     let time_deleted_dcm_obj = mask_all_vr(date_deleted_dcm_obj.clone(), VR::TM, dicom_time_data)?;
     let mut datetime_deleted_dcm_obj =
         mask_all_vr(time_deleted_dcm_obj.clone(), VR::DT, dicom_date_time)?;
-    datetime_deleted_dcm_obj.put(DataElement::new(tags::PATIENT_AGE, VR::AS, "099Y"));
-    datetime_deleted_dcm_obj.put(DataElement::new(tags::PATIENT_SEX, VR::CS, "O"));
+    datetime_deleted_dcm_obj.put(DataElement::new(
+        tags::PATIENT_AGE,
+        VR::AS,
+        dicom_value!(Strs, ["099Y".to_string()]),
+    ));
+    datetime_deleted_dcm_obj.put(DataElement::new(
+        tags::PATIENT_SEX,
+        VR::CS,
+        dicom_value!(Strs, ["O".to_string()]),
+    ));
     Ok(datetime_deleted_dcm_obj)
 }

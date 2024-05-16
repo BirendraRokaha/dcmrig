@@ -9,7 +9,11 @@ use std::{
 
 use anyhow::Result;
 use dicom::{
-    core::{dictionary::DataDictionaryEntryRef, header::Header, DataDictionary, DataElement, VR},
+    core::{
+        dictionary::DataDictionaryEntryRef, header::Header, DataDictionary, DataElement,
+        PrimitiveValue, VR,
+    },
+    dicom_value,
     dictionary_std::tags,
     object::{FileDicomObject, InMemDicomObject, StandardDataDictionary, Tag},
 };
@@ -151,7 +155,9 @@ pub fn failed_case_copy(source_path: &PathBuf, dest_path: &PathBuf) -> Result<()
             .to_str()
             .expect("Failed to convert filename to str")
     );
-    fs::copy(source_path, failed_cases_full_name)?;
+
+    let final_failed_path = check_if_dup_exists(failed_cases_full_name);
+    fs::copy(source_path, final_failed_path)?;
     Ok(())
 }
 // Replace all non_alphanumeric characters with an underscore '_'
@@ -171,11 +177,12 @@ pub fn get_sanitized_tag_values(
 ) -> Result<HashMap<String, String>> {
     let mut dicom_tags_values = HashMap::new();
     for each_tag in DICOM_TAGS_SANITIZED {
-        let tag_value = dcm_obj.element_by_name(each_tag);
-        match tag_value {
-            Ok(_) => {
-                // let f_tag_value: &str = tag_value?.to_str()?.as_ref();
-                dicom_tags_values.insert(each_tag.to_string(), tag_value?.to_str()?.to_string());
+        match dcm_obj.element_by_name(each_tag) {
+            Ok(tv) => {
+                dicom_tags_values.insert(
+                    each_tag.to_string(),
+                    tv.to_str()?.to_string().replace(&['-', ':'][..], ""),
+                );
             }
             Err(_) => {
                 warn!("No value for {}", each_tag);
@@ -184,6 +191,7 @@ pub fn get_sanitized_tag_values(
             }
         }
     }
+    // println!("{:#?}", dicom_tags_values);
     Ok(dicom_tags_values)
 }
 
@@ -212,29 +220,28 @@ pub fn mask_tags_with_id(
     mut dcm_obj: FileDicomObject<InMemDicomObject>,
     patient_deid: String,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
+    let p_value = dicom_value!(Strs, [patient_deid]);
+    let p_value_str = dicom_value!(Str, patient_deid);
     for each_v in DICOM_TAGS_CHANGE {
-        dcm_obj.put(DataElement::new(each_v.0, each_v.1, patient_deid.as_ref()));
+        if each_v.1 == VR::ST {
+            dcm_obj.put(DataElement::new(each_v.0, each_v.1, p_value_str.clone()));
+            continue;
+        }
+        dcm_obj.put(DataElement::new(each_v.0, each_v.1, p_value.clone()));
     }
     // Mask all PN values with the given ID
-    for each_element in dcm_obj.clone() {
-        if each_element.header().vr() == VR::PN {
-            dcm_obj.put(DataElement::new(
-                each_element.header().tag,
-                VR::PN,
-                patient_deid.as_ref(),
-            ));
-        }
-    }
+    dcm_obj = mask_all_vr(dcm_obj.clone(), VR::PN, p_value.clone())?;
+
     // Add deidentified Info
     dcm_obj.put(DataElement::new(
         tags::DEIDENTIFICATION_METHOD,
         VR::LO,
-        "DCMRig",
+        dicom_value!(Strs, ["DCMRig"]),
     ));
     dcm_obj.put(DataElement::new(
         tags::PATIENT_IDENTITY_REMOVED,
         VR::CS,
-        "YES",
+        dicom_value!(Strs, ["YES"]),
     ));
     Ok(dcm_obj)
 }
@@ -300,17 +307,28 @@ pub fn delete_private_tags(
 pub fn mask_all_vr(
     mut dcm_obj: FileDicomObject<InMemDicomObject>,
     vr: VR,
-    val: String,
+    val: PrimitiveValue,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
     for each_element in dcm_obj.clone() {
         if each_element.header().vr() == vr {
-            // dcm_obj.remove_element(each_element.header().tag);
             dcm_obj.put(DataElement::new(
                 each_element.tag(),
                 each_element.vr(),
                 val.clone(),
             ));
         }
+    }
+    Ok(dcm_obj)
+}
+
+pub fn mask_vr(
+    mut dcm_obj: FileDicomObject<InMemDicomObject>,
+    vr_list: Vec<VR>,
+    val: String,
+) -> Result<FileDicomObject<InMemDicomObject>> {
+    let p_value = dicom_value!(Strs, [val]);
+    for each_vr in vr_list {
+        dcm_obj = mask_all_vr(dcm_obj.clone(), each_vr, p_value.clone())?;
     }
     Ok(dcm_obj)
 }
@@ -371,9 +389,7 @@ pub fn generate_dicom_file_path(
         dicom_tags_values
             .get("StudyTime")
             .expect("Failed to extract value")
-            .split(".")
-            .next()
-            .expect("Failed to extract value"),
+            .trim(),
         dicom_tags_values
             .get("StudyInstanceUID")
             .expect("Failed to extract value")
@@ -391,6 +407,7 @@ pub fn generate_dicom_file_path(
         )
         .to_uppercase()
     );
+
     create_target_dir(&dir_path)?;
     Ok(dir_path)
 }

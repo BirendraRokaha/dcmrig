@@ -45,7 +45,7 @@ The binary will be generated at `target/release/dcmrig`
 - [x] [CookBook] Choose the tag as the identifier for DeID or Anon > Partially complete. Need to add for Anon
 - [ ] [CookBook] In the Add section, Select other tags or combination of other tags as teh value
 - [x] [CookBook] Selection to keep or remove private tags
-- [ ] [CookBook] Add VR as the field to add/remove/mask
+- [ ] [CookBook] Add VR as the field to remove/mask
 
 ---
 1. Deidentification
@@ -69,9 +69,11 @@ A sample cookbook toml file is created at the users home dir ~/.dcmrig/cookbook.
 [matchid]
 tag = "PatientID"
 
-# List of tags that will be masked by the DeID
+# List of tags and VRs that will be masked by the DeID
+# Only PN VR recommended to MASK
 [mask]
-tags = ["PatientID", "PatientName"]
+tags = [ "PatientID","PatientName","InstitutionName","InstitutionAddress","StudyID","AccessionNumber" ]
+vrs = ["PN"]
 
 # List of tags that will be deleted
 [delete]
@@ -79,6 +81,9 @@ tags = []
 private_tags = false
 
 # Dictionary of tags to be added along with their values
+# Date should follow YYYYMMDD format >> 19900101
+# Time should follow HHMMSS format >> 090000
+# DateTime should floolw YYYYMMDDTHHMMSS format 19900101T090000
 [add]
 tags.PatientIdentityRemoved = "Yes"
 tags.DeidentificationMethod = "DCMRig"

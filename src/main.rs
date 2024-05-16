@@ -1,7 +1,6 @@
 /*!
 The main entry point into dcmrig.
 */
-
 mod anon;
 mod args;
 mod cookbook_parser;
@@ -9,13 +8,15 @@ mod deid;
 mod sort;
 
 use crate::args::EntityType;
+
 use anon::dicom_anon;
+use deid::dicom_deid;
+use sort::dicom_sort;
+
 use anyhow::{Ok, Result};
 use args::ArgsParser;
 use clap::Parser;
 use dcmrig_rs::print_logo;
-use deid::dicom_deid;
-use sort::dicom_sort;
 use tracing::{error, info, warn, Level};
 
 fn app() -> Result<()> {
