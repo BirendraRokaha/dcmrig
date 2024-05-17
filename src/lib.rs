@@ -10,8 +10,11 @@ use std::{
 use anyhow::Result;
 use dicom::{
     core::{
-        dictionary::DataDictionaryEntryRef, header::Header, DataDictionary, DataElement,
-        PrimitiveValue, VR,
+        chrono::NaiveDate,
+        dictionary::DataDictionaryEntryRef,
+        header::Header,
+        value::{DicomDate, DicomDateTime, DicomTime},
+        DataDictionary, DataElement, PrimitiveValue, VR,
     },
     dicom_value,
     dictionary_std::tags,
@@ -23,7 +26,7 @@ use rayon::{
     iter::{ParallelBridge, ParallelIterator},
 };
 use regex::Regex;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use walkdir::{DirEntry, WalkDir};
 
 // Tags to get data for
@@ -191,7 +194,6 @@ pub fn get_sanitized_tag_values(
             }
         }
     }
-    // println!("{:#?}", dicom_tags_values);
     Ok(dicom_tags_values)
 }
 
@@ -220,28 +222,24 @@ pub fn mask_tags_with_id(
     mut dcm_obj: FileDicomObject<InMemDicomObject>,
     patient_deid: String,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
-    let p_value = dicom_value!(Strs, [patient_deid]);
-    let p_value_str = dicom_value!(Str, patient_deid);
-    for each_v in DICOM_TAGS_CHANGE {
-        if each_v.1 == VR::ST {
-            dcm_obj.put(DataElement::new(each_v.0, each_v.1, p_value_str.clone()));
-            continue;
-        }
-        dcm_obj.put(DataElement::new(each_v.0, each_v.1, p_value.clone()));
-    }
+    let p_value = dicom_vr_corrected_value(VR::PN, &patient_deid)?;
     // Mask all PN values with the given ID
     dcm_obj = mask_all_vr(dcm_obj.clone(), VR::PN, p_value.clone())?;
 
+    for each_v in DICOM_TAGS_CHANGE {
+        let p_value = dicom_vr_corrected_value(each_v.1, &patient_deid)?;
+        dcm_obj.put(DataElement::new(each_v.0, each_v.1, p_value.clone()));
+    }
     // Add deidentified Info
     dcm_obj.put(DataElement::new(
         tags::DEIDENTIFICATION_METHOD,
         VR::LO,
-        dicom_value!(Strs, ["DCMRig"]),
+        p_value.clone(),
     ));
     dcm_obj.put(DataElement::new(
         tags::PATIENT_IDENTITY_REMOVED,
         VR::CS,
-        dicom_value!(Strs, ["YES"]),
+        p_value,
     ));
     Ok(dcm_obj)
 }
@@ -254,13 +252,10 @@ pub fn tags_to_mask(
     for each_tag in mask_config_list {
         let each_tag_tag = each_tag.tag.inner();
         let each_tag_vr: VR = each_tag.vr.relaxed();
-        match dcm_obj.put(DataElement::new(
-            each_tag_tag,
-            each_tag_vr,
-            patient_deid.as_ref(),
-        )) {
+        let value = dicom_vr_corrected_value(each_tag_vr, &patient_deid)?;
+        match dcm_obj.put(DataElement::new(each_tag_tag, each_tag_vr, value)) {
             Some(_) => (),
-            None => warn!("Mask Tag : Failed to mask tag {:?}", each_tag_tag),
+            None => debug!("Mask Tag : Failed to mask tag {:?}", each_tag_tag),
         }
     }
     Ok(dcm_obj)
@@ -274,7 +269,8 @@ pub fn tags_to_add(
         let config_tag = each_element.0;
         let config_value = each_element.1;
         let (each_tag, each_vr) = extract_tag_vr_from_str(&config_tag)?;
-        dcm_obj.put(DataElement::new(each_tag, each_vr, config_value.as_ref()));
+        let value = dicom_vr_corrected_value(each_vr, &config_value)?;
+        dcm_obj.put(DataElement::new(each_tag, each_vr, value));
     }
     Ok(dcm_obj)
 }
@@ -286,8 +282,7 @@ pub fn tags_to_delete(
     for each_tag in delete_config_list {
         match dcm_obj.remove_element(each_tag.tag.inner()) {
             true => (),
-            // false => warn!("Delete Tag: {:?} not valid/found", each_tag.tag.inner()),
-            false => (),
+            false => debug!("Delete Tag: {:?} not valid/found", each_tag.tag.inner()),
         }
     }
     Ok(dcm_obj)
@@ -440,4 +435,69 @@ pub fn extract_tag_vr_from_str(tag_name: &String) -> Result<(Tag, VR)> {
 pub fn gen_id() -> String {
     let alpha_numeric = &nanoid::alphabet::SAFE[2..];
     nanoid!(10, &alpha_numeric)
+}
+
+pub fn dicom_vr_corrected_value(vr: VR, value: &String) -> Result<PrimitiveValue> {
+    let r_value = match vr {
+        VR::AE | VR::AS | VR::PN | VR::SH | VR::CS | VR::LO | VR::UI | VR::UC => {
+            dicom_value!(Strs, [value.clone()])
+        }
+        VR::ST | VR::LT | VR::UT | VR::UR => {
+            dicom_value!(Str, value.clone())
+        }
+        VR::DA => {
+            if value.len() != 8 {
+                error!(
+                    "Issue With Date value Does it follow this format YYYYMMDD: {}",
+                    value
+                );
+                exit(1);
+            }
+            let d_date = DicomDate::try_from(&NaiveDate::parse_from_str(&value, "%Y%m%d")?)?;
+            dicom_value!(Date, d_date)
+        }
+        VR::TM => {
+            if value.len() != 6 {
+                error!(
+                    "Issue With Time value Does it follow this format HHMMSS: {}",
+                    value
+                );
+                exit(1);
+            }
+            let hr: u8 = value[0..2].to_string().parse()?;
+            let min: u8 = value[2..4].to_string().parse()?;
+            let sec: u8 = value[4..6].to_string().parse()?;
+            let d_time = DicomTime::from_hms(hr, min, sec)?;
+            dicom_value!(Time, d_time)
+        }
+        VR::DT => {
+            let split_value: Vec<&str> = value.split("T").collect();
+            let t_date = split_value[0];
+            let t_time = split_value[1];
+
+            if t_date.len() != 8 {
+                error!(
+                    "Issue With Date value Does it follow this format YYYYMMDD: {}",
+                    value
+                );
+                exit(1);
+            }
+            let d_date = DicomDate::try_from(&NaiveDate::parse_from_str(&t_date, "%Y%m%d")?)?;
+
+            if t_time.len() != 6 {
+                error!(
+                    "Issue With Time value Does it follow this format HHMMSS: {}",
+                    value
+                );
+                exit(1);
+            }
+            let hr: u8 = t_time[0..2].to_string().parse()?;
+            let min: u8 = t_time[2..4].to_string().parse()?;
+            let sec: u8 = t_time[4..6].to_string().parse()?;
+            let d_time = DicomTime::from_hms(hr, min, sec)?;
+            dicom_value!(DateTime, DicomDateTime::from_date_and_time(d_date, d_time)?)
+        }
+        _ => dicom_value!(Str, value.clone()),
+    };
+    Ok(r_value)
 }

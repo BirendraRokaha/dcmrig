@@ -2,13 +2,9 @@ use anyhow::Result;
 use crossbeam::sync::WaitGroup;
 use dcmrig_rs::*;
 use dicom::{
-    core::{
-        chrono::NaiveDate,
-        value::{DicomDate, DicomDateTime, DicomTime},
-        DataElement, VR,
-    },
+    core::{DataElement, VR},
     dicom_value,
-    dictionary_std::tags,
+    dictionary_std::tags::{self},
     object::{open_file, FileDicomObject, InMemDicomObject},
 };
 use rayon::prelude::*;
@@ -112,6 +108,7 @@ fn anon_each_dcm_file(
     new_dicom_object = dicom_anon_date_time(new_dicom_object)?;
     let dicom_tags_values: HashMap<String, String> = get_sanitized_tag_values(&new_dicom_object)?;
     let new_dp = destination_path.clone();
+    let new_dicom_object = delete_private_tags(new_dicom_object)?;
     let dcm_obj_clone = new_dicom_object.clone();
     rayon::spawn(move || {
         let file_name =
@@ -131,24 +128,20 @@ fn dicom_anon_date_time(
     dcm_obj: FileDicomObject<InMemDicomObject>,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
     // Setting Up primitives
+
     let time_str = "090000".to_string();
     let date_str = "19000101".to_string();
-    let d_date = DicomDate::try_from(&NaiveDate::parse_from_str(&date_str, "%Y%m%d")?)?;
+    let date_time = format!("{date_str}T{time_str}");
 
-    let hr: u8 = time_str[0..2].to_string().parse()?;
-    let min: u8 = time_str[2..4].to_string().parse()?;
-    let sec: u8 = time_str[4..6].to_string().parse()?;
-    let d_time = DicomTime::from_hms(hr, min, sec)?;
-
-    let dicom_date_data = dicom_value!(Date, d_date);
-    let dicom_time_data = dicom_value!(Time, d_time);
-    let dicom_date_time =
-        dicom_value!(DateTime, DicomDateTime::from_date_and_time(d_date, d_time)?);
+    let dicom_date_data = dicom_vr_corrected_value(VR::DA, &date_str)?;
+    let dicom_time_data = dicom_vr_corrected_value(VR::TM, &time_str)?;
+    let dicom_date_time = dicom_vr_corrected_value(VR::DT, &date_time)?;
 
     let date_deleted_dcm_obj = mask_all_vr(dcm_obj.clone(), VR::DA, dicom_date_data)?;
     let time_deleted_dcm_obj = mask_all_vr(date_deleted_dcm_obj.clone(), VR::TM, dicom_time_data)?;
     let mut datetime_deleted_dcm_obj =
         mask_all_vr(time_deleted_dcm_obj.clone(), VR::DT, dicom_date_time)?;
+
     datetime_deleted_dcm_obj.put(DataElement::new(
         tags::PATIENT_AGE,
         VR::AS,
@@ -159,5 +152,6 @@ fn dicom_anon_date_time(
         VR::CS,
         dicom_value!(Strs, ["O".to_string()]),
     ));
+
     Ok(datetime_deleted_dcm_obj)
 }

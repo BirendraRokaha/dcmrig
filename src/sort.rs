@@ -11,6 +11,7 @@ use std::{
 };
 use tracing::{debug, error, info, warn};
 use walkdir::DirEntry;
+
 pub fn dicom_sort(
     source_path: PathBuf,
     destination_path: PathBuf,

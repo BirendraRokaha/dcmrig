@@ -95,7 +95,7 @@ private_tags = false
 # Dictionary of tags to be added along with their values
 # Date should follow YYYYMMDD format >> 19900101
 # Time should follow HHMMSS format >> 090000
-# DateTime should floolw YYYYMMDDTHHMMSS format 19900101T090000
+# DateTime should floolw YYYYMMDDTHHMMSS format >> 19900101T090000
 [add]
 tags.PatientIdentityRemoved = "Yes"
 tags.DeidentificationMethod = "DCMRig"
