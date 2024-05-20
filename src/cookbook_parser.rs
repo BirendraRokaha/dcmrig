@@ -99,6 +99,10 @@ private_tags = false
 [add]
 tags.PatientIdentityRemoved = "Yes"
 tags.DeidentificationMethod = "DCMRig"
+tags.ClinicalTrialSponsorName = "TrialName"
+# Timepoint is a special field which follows the following pattern
+# PatientID_StudyDateTStudyTime_Modality
+tags.ClinicalTrialTimePointID = "PatientID_StudyDateTStudyTime_Modality"
 "#;
     let mut file_to_save =
         File::create(cookbook_file_path).expect("Failed to create cookbook path");
@@ -172,20 +176,19 @@ fn check_valid_tag_hashmap(tag_hash: HashMap<String, String>) -> HashMap<String,
     tags_hash_m
 }
 
-fn check_tag_list(tag_list: Vec<String>) -> Vec<DataDictionaryEntryRef<'static>> {
+fn check_tag_list(action: &str, tag_list: Vec<String>) -> Vec<DataDictionaryEntryRef<'static>> {
     match tag_list.is_empty() {
         true => {
-            warn!("The Mask cookbook is empty or corrupted");
+            warn!("The {} cookbook is empty or corrupted", action);
             return vec![];
         }
         false => {
             info!("Checking Mask list");
             let tag_list: Vec<DataDictionaryEntryRef<'_>> = check_valid_tag_vec(tag_list);
-            // info!("Tags to mask {:?}", mask_list);
             tag_list
                 .iter()
                 .enumerate()
-                .for_each(|(_i, v)| info!("Tags to mask {}", v.alias));
+                .for_each(|(_i, v)| info!("Tags to {} {}", action, v.alias));
             return tag_list;
         }
     }
@@ -194,7 +197,7 @@ fn check_tag_list(tag_list: Vec<String>) -> Vec<DataDictionaryEntryRef<'static>>
 fn check_vr_list(vr_list: Vec<String>) -> Vec<VR> {
     match vr_list.is_empty() {
         true => {
-            warn!("The Mask cookbook is empty or corrupted");
+            warn!("The Mask VR cookbook is empty or corrupted");
             return vec![];
         }
         false => {
@@ -264,8 +267,8 @@ pub fn parse_toml_cookbook() -> Result<(
     };
     info!("MatchID > {}", matchid.alias);
 
-    let mask_tag_list = check_tag_list(mask_list);
-    let delete_tag_list = check_tag_list(delete_list);
+    let mask_tag_list = check_tag_list("mask", mask_list);
+    let delete_tag_list = check_tag_list("delete", delete_list);
 
     let mask_vr_list = check_vr_list(mask_vrs_list);
 

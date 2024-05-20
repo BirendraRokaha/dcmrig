@@ -17,7 +17,7 @@ use dicom::{
         DataDictionary, DataElement, PrimitiveValue, VR,
     },
     dicom_value,
-    dictionary_std::tags,
+    dictionary_std::tags::{self},
     object::{FileDicomObject, InMemDicomObject, StandardDataDictionary, Tag},
 };
 use indicatif::{ProgressBar, ProgressStyle};
@@ -44,13 +44,14 @@ static DICOM_TAGS_SANITIZED: [&str; 10] = [
 ];
 
 // Tags to change data for
-static DICOM_TAGS_CHANGE: [(Tag, VR); 6] = [
+static DICOM_TAGS_CHANGE: [(Tag, VR); 7] = [
     (tags::PATIENT_ID, VR::LO),
     (tags::PATIENT_NAME, VR::PN),
     (tags::INSTITUTION_NAME, VR::LO),
     (tags::INSTITUTION_ADDRESS, VR::ST),
     (tags::ACCESSION_NUMBER, VR::SH),
     (tags::STUDY_ID, VR::SH),
+    (tags::PATIENT_COMMENTS, VR::LT),
 ];
 
 // Logo
@@ -63,7 +64,7 @@ pub fn print_logo() {
         "
 ██████╗  ██████╗███╗   ███╗    ██████╗ ██╗ ██████╗ 
 ██╔══██╗██╔════╝████╗ ████║    ██╔══██╗██║██╔════╝ 
-██║  ██║██║     ██╔████╔██║    ██████╔╝██║██║  ███╗
+██║  ██║██║     ██╔████╔██║ ██ ██████╔╝██║██║  ███╗
 ██║  ██║██║     ██║╚██╔╝██║    ██╔══██╗██║██║   ██║
 ██████╔╝╚██████╗██║ ╚═╝ ██║    ██║  ██║██║╚██████╔╝
 "
@@ -299,6 +300,30 @@ pub fn delete_private_tags(
     Ok(dcm_obj)
 }
 
+pub fn anon_dicom_uids(
+    mut dcm_obj: FileDicomObject<InMemDicomObject>,
+) -> Result<FileDicomObject<InMemDicomObject>> {
+    let uid_tag_list = [
+        "SOPInstanceUID".to_string(),
+        "StudyInstanceUID".to_string(),
+        "SeriesInstanceUID".to_string(),
+        "FrameOfReferenceUID".to_string(),
+    ];
+    let anon_uid_prefix: Vec<_> = "1.2.999.999999.9999.9.9.9.9999".split(".").collect();
+
+    for each_uid in uid_tag_list {
+        let (each_tag, each_vr) = extract_tag_vr_from_str(&each_uid)?;
+        let org_uid_val = dcm_obj.element(each_tag)?.to_str()?;
+        let org_uid_vec: Vec<_> = org_uid_val.split(".").collect();
+        let mut new_uid_parts = anon_uid_prefix.clone();
+        new_uid_parts.extend_from_slice(&org_uid_vec[9..]);
+        let new_uid_val = new_uid_parts.join(".");
+        let value = dicom_vr_corrected_value(each_vr, &new_uid_val)?;
+        dcm_obj.put(DataElement::new(each_tag, each_vr, value));
+    }
+    Ok(dcm_obj)
+}
+
 pub fn mask_all_vr(
     mut dcm_obj: FileDicomObject<InMemDicomObject>,
     vr: VR,
@@ -370,6 +395,18 @@ pub fn generate_dicom_file_path(
     dicom_tags_values: HashMap<String, String>,
     destination_path: &PathBuf,
 ) -> Result<String> {
+    let temp_trimmed_study_uid = dicom_tags_values
+        .get("StudyInstanceUID")
+        .expect("Failed to extract value")
+        .split(".")
+        .last()
+        .expect("Failed to extract value");
+
+    let final_trimmed_uid = if temp_trimmed_study_uid.len() > 5 {
+        temp_trimmed_study_uid[temp_trimmed_study_uid.len() - 5..].to_string()
+    } else {
+        temp_trimmed_study_uid.to_string()
+    };
     let dir_path = format!(
         "{}/{}/{}T{}_{}/{:0>4}_{}",
         destination_path.display(),
@@ -385,12 +422,7 @@ pub fn generate_dicom_file_path(
             .get("StudyTime")
             .expect("Failed to extract value")
             .trim(),
-        dicom_tags_values
-            .get("StudyInstanceUID")
-            .expect("Failed to extract value")
-            .split(".")
-            .last()
-            .expect("Failed to extract value"),
+        final_trimmed_uid,
         dicom_tags_values
             .get("SeriesNumber")
             .expect("Failed to extract value"),

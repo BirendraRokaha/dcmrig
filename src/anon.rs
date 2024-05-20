@@ -106,14 +106,17 @@ fn anon_each_dcm_file(
         .to_string();
     let mut new_dicom_object = mask_tags_with_id(dcm_obj.clone(), patient_anon_id)?;
     new_dicom_object = dicom_anon_date_time(new_dicom_object)?;
+    new_dicom_object = delete_private_tags(new_dicom_object)?;
+    new_dicom_object = anon_dicom_uids(new_dicom_object)?;
     let dicom_tags_values: HashMap<String, String> = get_sanitized_tag_values(&new_dicom_object)?;
-    let new_dp = destination_path.clone();
-    let new_dicom_object = delete_private_tags(new_dicom_object)?;
+
     let dcm_obj_clone = new_dicom_object.clone();
+    let new_dp = destination_path.clone();
     rayon::spawn(move || {
-        let file_name =
-            generate_dicom_file_name(&dicom_tags_values, "ANON".to_string()).expect("msg");
-        let dir_path = generate_dicom_file_path(dicom_tags_values, &new_dp).expect("msg");
+        let file_name = generate_dicom_file_name(&dicom_tags_values, "ANON".to_string())
+            .expect("Failed to generate file Name");
+        let dir_path = generate_dicom_file_path(dicom_tags_values, &new_dp)
+            .expect("Failed to generate file path");
         let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
         debug!("Saving file: {} to: {}", file_name, dir_path);
         dcm_obj_clone
