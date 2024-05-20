@@ -1,11 +1,11 @@
 use crate::cookbook_parser::parse_toml_cookbook;
-use anyhow::{bail, Result};
+use anyhow::Result;
 use crossbeam::sync::WaitGroup;
 use dcmrig_rs::*;
 
 use dicom::{
     core::{dictionary::DataDictionaryEntryRef, VR},
-    object::{open_file, FileDicomObject, InMemDicomObject},
+    object::{FileDicomObject, InMemDicomObject},
 };
 
 use rayon::prelude::*;
@@ -56,7 +56,10 @@ pub fn dicom_deid(
         .par_iter()
         .enumerate()
         .for_each(|(_index, working_path)| {
-            if let Ok(dcm_obj) = open_file(working_path.path()) {
+            if let Ok(dcm_obj) = dicom::object::OpenFileOptions::new()
+                .read_all()
+                .open_file(working_path.path())
+            {
                 deid_each_dcm_file(
                     &dcm_obj,
                     &destination_path,
@@ -80,11 +83,13 @@ pub fn dicom_deid(
                         .expect("Failed to copy file to FAILED_CASES directory");
                 });
             } else {
+                let nwg = wg.clone();
                 let mut map = non_dcm_cases.lock().expect("Failed to lock mutex");
                 *map += 1;
                 copy_non_dicom_files(&working_path, &destination_path).unwrap_or_else(|_| {
                     error!("Can't copy non dicom file {:#?}", &working_path.file_name());
-                })
+                });
+                drop(nwg);
             }
             pb.inc(1);
         });
@@ -118,7 +123,6 @@ fn deid_each_dcm_file(
     wg: WaitGroup,
 ) -> Result<()> {
     let tag_to_match = dcm_obj.element(match_id.tag.inner())?.to_str()?.to_string();
-    // let patient_id = dcm_obj.element_by_name("PatientID")?.to_str()?.to_string();
     let patient_deid = match mapping_dict.get(&tag_to_match) {
         Some(deid) => deid.to_string(),
         None => "".to_string(),
@@ -159,6 +163,7 @@ fn deid_each_dcm_file(
     };
 
     let dicom_tags_values = get_sanitized_tag_values(&new_dicom_object)?;
+
     let new_dp = destination_path.clone();
     let dcm_obj_clone = new_dicom_object.clone();
 
@@ -169,9 +174,10 @@ fn deid_each_dcm_file(
             .expect("Failed to generate DIR path");
         let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
         debug!("Saving file: {} to: {}", file_name, dir_path);
+        let dcm_buffer = File::create(full_path).expect("Failed to create file");
         dcm_obj_clone
-            .write_to_file(full_path)
-            .expect("Failed to save file");
+            .write_all(dcm_buffer)
+            .expect("Failed to add dcm value to buffer");
         drop(wg);
     });
     Ok(())
@@ -201,7 +207,7 @@ fn generate_mapping_dict(mapping_table: &PathBuf) -> Result<HashMap<String, Stri
         }
     } else {
         error!("Failed to open file {}", &mapping_table.display());
-        bail!("")
+        exit(1);
     }
     Ok(data_map)
 }

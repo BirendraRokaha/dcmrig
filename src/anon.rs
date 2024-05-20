@@ -4,12 +4,13 @@ use dcmrig_rs::*;
 use dicom::{
     core::{DataElement, VR},
     dicom_value,
-    dictionary_std::tags::{self},
+    dictionary_std::tags,
     object::{open_file, FileDicomObject, InMemDicomObject},
 };
 use rayon::prelude::*;
 use std::{
     collections::HashMap,
+    fs::File,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
@@ -59,11 +60,13 @@ pub fn dicom_anon(
                         .expect("Failed to copy file to FAILED_CASES directory");
                 });
             } else {
+                let nwg = wg.clone();
                 let mut map = non_dcm_cases.lock().expect("Failed to lock mutex");
                 *map += 1;
                 copy_non_dicom_files(&working_path, &destination_path).unwrap_or_else(|_| {
                     error!("Can't copy non dicom file {:#?}", &working_path.file_name())
-                })
+                });
+                drop(nwg);
             }
             pb.inc(1);
         });
@@ -119,9 +122,10 @@ fn anon_each_dcm_file(
             .expect("Failed to generate file path");
         let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
         debug!("Saving file: {} to: {}", file_name, dir_path);
+        let dcm_buffer = File::create(full_path).expect("Failed to create file");
         dcm_obj_clone
-            .write_to_file(full_path)
-            .expect("Failed to save file");
+            .write_all(dcm_buffer)
+            .expect("Failed to add dcm value to buffer");
         drop(wg);
     });
     Ok(())

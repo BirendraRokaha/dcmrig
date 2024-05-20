@@ -195,6 +195,7 @@ pub fn get_sanitized_tag_values(
             }
         }
     }
+    dicom_tags_values.insert("ImagePlane".to_string(), determine_plane(&dcm_obj)?);
     Ok(dicom_tags_values)
 }
 
@@ -316,7 +317,7 @@ pub fn anon_dicom_uids(
         let org_uid_val = dcm_obj.element(each_tag)?.to_str()?;
         let org_uid_vec: Vec<_> = org_uid_val.split(".").collect();
         let mut new_uid_parts = anon_uid_prefix.clone();
-        new_uid_parts.extend_from_slice(&org_uid_vec[9..]);
+        new_uid_parts.extend_from_slice(&org_uid_vec[8..]);
         let new_uid_val = new_uid_parts.join(".");
         let value = dicom_vr_corrected_value(each_vr, &new_uid_val)?;
         dcm_obj.put(DataElement::new(each_tag, each_vr, value));
@@ -408,7 +409,7 @@ pub fn generate_dicom_file_path(
         temp_trimmed_study_uid.to_string()
     };
     let dir_path = format!(
-        "{}/{}/{}T{}_{}/{:0>4}_{}",
+        "{}/{}/{}T{}_{:0>5}/{:0>4}_{}_{}",
         destination_path.display(),
         dicom_tags_values
             .get("PatientID")
@@ -432,7 +433,11 @@ pub fn generate_dicom_file_path(
                 .expect("Failed to extract value")
                 .trim()
         )
-        .to_uppercase()
+        .to_uppercase(),
+        dicom_tags_values
+            .get("ImagePlane")
+            .expect("Failed to extract value")
+            .trim()
     );
 
     create_target_dir(&dir_path)?;
@@ -467,6 +472,27 @@ pub fn extract_tag_vr_from_str(tag_name: &String) -> Result<(Tag, VR)> {
 pub fn gen_id() -> String {
     let alpha_numeric = &nanoid::alphabet::SAFE[2..];
     nanoid!(10, &alpha_numeric)
+}
+
+fn determine_plane(dcm_obj: &FileDicomObject<InMemDicomObject>) -> Result<String> {
+    let orientation: Vec<f64> = match dcm_obj.element_by_name("ImageOrientationPatient") {
+        Ok(value) => value.to_multi_float64()?,
+        Err(_) => vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    };
+    let row_x = orientation[0].round() as i8;
+    let row_y = orientation[1].round() as i8;
+    let col_y = orientation[4].round() as i8;
+    let col_z = orientation[5].round() as i8;
+    let plane = if row_x == 1 && col_z == -1 {
+        "COR".to_string()
+    } else if row_x == 1 && col_y == 1 {
+        "AX".to_string()
+    } else if row_y == 1 && col_z == -1 {
+        "SAG".to_string()
+    } else {
+        "NA".to_string()
+    };
+    Ok(plane)
 }
 
 pub fn dicom_vr_corrected_value(vr: VR, value: &String) -> Result<PrimitiveValue> {

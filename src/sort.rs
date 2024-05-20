@@ -1,7 +1,10 @@
 use anyhow::Result;
 use crossbeam::sync::WaitGroup;
 use dcmrig_rs::*;
-use dicom::object::{open_file, FileDicomObject, InMemDicomObject};
+use dicom::{
+    dictionary_std::tags::PIXEL_DATA,
+    object::{FileDicomObject, InMemDicomObject},
+};
 use rayon::prelude::*;
 use std::{
     collections::HashMap,
@@ -36,7 +39,10 @@ pub fn dicom_sort(
         .par_iter()
         .enumerate()
         .for_each(|(_index, working_path)| {
-            if let Ok(dcm_obj) = open_file(working_path.path()) {
+            if let Ok(dcm_obj) = dicom::object::OpenFileOptions::new()
+                .read_until(PIXEL_DATA)
+                .open_file(working_path.path())
+            {
                 sort_each_dcm_file(
                     working_path,
                     &dcm_obj,
@@ -55,11 +61,13 @@ pub fn dicom_sort(
                         .expect("Failed to copy file to FAILED_CASES directory");
                 });
             } else {
+                let nwg = wg.clone();
                 let mut map = non_dcm_cases.lock().expect("Failed to lock mutex");
                 *map += 1;
                 copy_non_dicom_files(&working_path, &destination_path).unwrap_or_else(|_| {
                     error!("Can't copy non dicom file {:#?}", &working_path.file_name())
-                })
+                });
+                drop(nwg);
             }
             pb.inc(1);
         });
@@ -94,8 +102,22 @@ fn sort_each_dcm_file(
                 .trim(),
         ),
     )?;
+
+    let temp_trimmed_study_uid = dicom_tags_values
+        .get("StudyInstanceUID")
+        .expect("Failed to extract value")
+        .split(".")
+        .last()
+        .expect("Failed to extract value");
+
+    let final_trimmed_uid = if temp_trimmed_study_uid.len() > 5 {
+        temp_trimmed_study_uid[temp_trimmed_study_uid.len() - 5..].to_string()
+    } else {
+        temp_trimmed_study_uid.to_string()
+    };
+
     let dir_path = format!(
-        "{}/{}{}T{}_{}/{:0>4}_{}",
+        "{}/{}{}T{}_{}/{:0>4}_{}_{}",
         destination_path.display(),
         order_level,
         dicom_tags_values
@@ -108,12 +130,7 @@ fn sort_each_dcm_file(
             .split(".")
             .next()
             .expect("Failed to extract value"),
-        dicom_tags_values
-            .get("StudyInstanceUID")
-            .expect("Failed to extract value")
-            .split(".")
-            .last()
-            .expect("Failed to extract value"),
+        final_trimmed_uid,
         dicom_tags_values
             .get("SeriesNumber")
             .expect("Failed to extract value"),
@@ -122,7 +139,11 @@ fn sort_each_dcm_file(
                 .get("SeriesDescription")
                 .expect("Failed to extract value")
                 .trim()
-        )
+        ),
+        dicom_tags_values
+            .get("ImagePlane")
+            .expect("Failed to extract value")
+            .trim()
     );
 
     let c_source_path = source_path.clone();
