@@ -132,6 +132,7 @@ fn deid_each_dcm_file(
         debug!("DeID for {tag_to_match} is not found");
         return Ok(());
     }
+
     let mut new_dicom_object = dcm_obj.clone();
 
     if private_tags_del {
@@ -172,6 +173,7 @@ fn deid_each_dcm_file(
             .expect("Failed to generate file name");
         let dir_path = generate_dicom_file_path(dicom_tags_values, &new_dp)
             .expect("Failed to generate DIR path");
+
         let full_path = check_if_dup_exists(format!("{}/{}", dir_path, file_name));
         debug!("Saving file: {} to: {}", file_name, dir_path);
         let dcm_buffer = File::create(full_path).expect("Failed to create file");

@@ -17,7 +17,7 @@ use dicom::{
         DataDictionary, DataElement, PrimitiveValue, VR,
     },
     dicom_value,
-    dictionary_std::tags::{self},
+    dictionary_std::tags::{self, ORIGINAL_ATTRIBUTES_SEQUENCE},
     object::{FileDicomObject, InMemDicomObject, StandardDataDictionary, Tag},
 };
 use indicatif::{ProgressBar, ProgressStyle};
@@ -255,11 +255,46 @@ pub fn tags_to_mask(
         let each_tag_tag = each_tag.tag.inner();
         let each_tag_vr: VR = each_tag.vr.relaxed();
         let value = dicom_vr_corrected_value(each_tag_vr, &patient_deid)?;
-        match dcm_obj.put(DataElement::new(each_tag_tag, each_tag_vr, value)) {
+        match dcm_obj.put(DataElement::new(each_tag_tag, each_tag_vr, value.clone())) {
             Some(_) => (),
-            None => debug!("Mask Tag : Failed to mask tag {:?}", each_tag_tag),
+            None => error!("Mask Tag : Failed to mask tag {:?}", each_tag_tag),
+        }
+
+        fn mask_sq_vrs(
+            data_element: &DataElement<InMemDicomObject>,
+            // dcm_obj: &mut FileDicomObject<InMemDicomObject>,
+            value: PrimitiveValue,
+            tag_to_check: Tag,
+        ) {
+            for each_sq_element in data_element.items().into_iter() {
+                for each_element in each_sq_element.into_iter() {
+                    for sq_inner_element in each_element.to_owned() {
+                        if sq_inner_element.vr() == VR::SQ {
+                            mask_sq_vrs(
+                                &sq_inner_element,
+                                // mut dcm_obj,
+                                value.clone(),
+                                tag_to_check,
+                            );
+                        }
+                        if sq_inner_element.tag() == tag_to_check {
+                            // sq_inner_element.update_value(|e| {
+                            //     e.primitive_mut().unwrap().truncate(0);
+                            // });
+                            // TODO
+                        }
+                    }
+                }
+            }
+        }
+
+        for data_element in &dcm_obj {
+            if data_element.vr() == VR::SQ {
+                mask_sq_vrs(data_element, value.clone(), each_tag_tag);
+            }
         }
     }
+
     Ok(dcm_obj)
 }
 
@@ -293,11 +328,38 @@ pub fn tags_to_delete(
 pub fn delete_private_tags(
     mut dcm_obj: FileDicomObject<InMemDicomObject>,
 ) -> Result<FileDicomObject<InMemDicomObject>> {
+    fn is_private(tag: Tag) -> bool {
+        return tag.group() % 2 == 1;
+    }
+
+    let mut private_tags: Vec<Tag> = vec![];
     for each_element in dcm_obj.clone() {
-        if each_element.header().vr() == VR::SQ {
-            dcm_obj.remove_element(each_element.header().tag);
+        collect_tags(each_element, &mut private_tags);
+    }
+
+    fn collect_tags(data_element: DataElement<InMemDicomObject>, private_tags: &mut Vec<Tag>) {
+        let tag = data_element.tag();
+        if is_private(tag) {
+            private_tags.push(tag);
+        };
+
+        if data_element.vr() == VR::SQ {
+            for each_sq_element in data_element.items().into_iter() {
+                for each_element in each_sq_element.into_iter() {
+                    for each_tag in each_element {
+                        collect_tags(each_tag.to_owned(), private_tags)
+                    }
+                }
+            }
         }
     }
+
+    for each in private_tags {
+        dcm_obj.remove_element(each);
+    }
+
+    dcm_obj.remove_element(ORIGINAL_ATTRIBUTES_SEQUENCE);
+
     Ok(dcm_obj)
 }
 
@@ -414,7 +476,9 @@ pub fn generate_dicom_file_path(
         dicom_tags_values
             .get("PatientID")
             .expect("Failed to extract value")
-            .trim(),
+            .trim()
+            .replace(" ", "_")
+            .replace("^", "_"),
         dicom_tags_values
             .get("StudyDate")
             .expect("Failed to extract value")
