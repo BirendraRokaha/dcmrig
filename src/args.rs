@@ -51,7 +51,7 @@ pub struct AnonCommand {
 
 #[derive(Debug, Args)]
 pub struct DeidCommand {
-    /// Mapping table in the following order seperated by line DEID,PatientID eg DEID_001,U012345
+    /// Mapping table in the following order separated by line DEID,PatientID eg DEID_001,U012345
     #[clap(short, long)]
     pub mapping_table: PathBuf,
     /// Source data path, All files will be recursively indexed

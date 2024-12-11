@@ -43,7 +43,7 @@ The binary will be generated at `target/release/dcmrig`
 
 ### Roadmap
 - [x] [CookBook] Choose the tag as the identifier for DeID or Anon > Partially complete. Need to add for Anon
-- [ ] [CookBook] In the Add section, Select other tags or combination of other tags as teh value
+- [ ] [CookBook] In the Add section, Select other tags or combination of other tags as the value
 - [x] [CookBook] Selection to keep or remove private tags
 - [ ] [CookBook] Add VR as the field to remove/mask
 
